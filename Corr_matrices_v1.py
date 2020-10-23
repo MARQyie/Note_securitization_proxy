@@ -25,7 +25,7 @@ from scipy import stats
 # Plotting
 import matplotlib.pyplot as plt
 import seaborn as sns
-sns.set(style = 'whitegrid', font_scale = 1.5)
+sns.set(style = 'whitegrid', font_scale = 1.6)
 
 # Set WD
 import os
@@ -56,12 +56,8 @@ vars_cr = df.columns[df.columns.str.contains('cr')].tolist()
 ## HMDA
 vars_hmda = df.columns[df.columns.str.contains('hmda')].tolist()
 
-## SDI
-vars_sdi = df.columns[df.columns.str.contains('sdi')].tolist()
-
 ## Total
-vars_tot = vars_cr + vars_hmda + vars_sdi + ['RC2170']
-vars_tot.remove('cr_ta_vie')
+vars_tot = vars_cr + vars_hmda + ['ta']
 
 #--------------------------------------------
 # Heatmap function
@@ -77,7 +73,7 @@ def heatmap(matrix, file, annot = True):
                'cmap': 'coolwarm'}
     
     # Make heatmap
-    fig, ax = plt.subplots(figsize=(24,12))  
+    fig, ax = plt.subplots(figsize=(24,16))  
     sns.heatmap(matrix, **dic_aes)
     plt.tight_layout()
     
@@ -104,7 +100,7 @@ heatmap(tot_ns_corr, 'Corr_tot_noscale.png')
            
 # Call Reports and HMDA, not scaled
 ## Get correlation matrix
-crhmda_ns_corr = df[[var for var in vars_tot if var not in vars_sdi] ].corr(method = 'spearman')
+crhmda_ns_corr = df[vars_tot].corr(method = 'spearman')
 _, crhmda_ns_corr_pval = stats.spearmanr(df[vars_tot]) # Only one thing is insignficant: ABCP vs HMDA priv
 
 ## PLot

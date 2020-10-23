@@ -18,7 +18,7 @@ import seaborn as sns
 sns.set(style = 'whitegrid', font_scale = 2)
 
 # Machine learning packages
-from sklearn.neighbors import NearestNeighbors
+from sklearn.cluster import KMeans
 
 # Set WD
 import os
@@ -50,11 +50,13 @@ vars_cr = df.columns[df.columns.str.contains('cr')].tolist()
 vars_hmda = df.columns[df.columns.str.contains('hmda')].tolist()
 
 ## Total
-vars_tot = vars_cr + vars_hmda + ['RC2170']
+vars_tot = vars_cr + vars_hmda + ['ta']
 vars_tot.remove('cr_ta_vie')
 
 #--------------------------------------------
 # KNN
 #--------------------------------------------
 
-nbrs = NearestNeighbors(n_neighbors = 2, algorithm = 'auto').fit(df[vars_tot])
+kmeans = KMeans(n_clusters=3)
+kmeans.fit(df[vars_tot])
+centroids  = kmeans.cluster_centers_ 

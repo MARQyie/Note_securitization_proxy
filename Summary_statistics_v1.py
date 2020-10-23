@@ -47,11 +47,10 @@ vars_cr = df.columns[df.columns.str.contains('cr')].tolist()
 vars_hmda = df.columns[df.columns.str.contains('hmda')].tolist()
 
 ## Total
-vars_tot = vars_cr + vars_hmda + ['RC2170']
-vars_tot.remove('cr_ta_vie')
+vars_tot = vars_cr + vars_hmda + ['ta']
 
 #--------------------------------------------
-# Summary Statistics
+# Summary Statistics Securitization
 #--------------------------------------------
 
 # Get Summary Statistics
@@ -65,13 +64,82 @@ ss.iloc[:,1] = ss.iloc[:,1].round(2).apply(lambda x : "{:,}".format(x))
 ss.columns = ['Mean','SD']
 
 # Change row names
-row_names = ['Securitization Income','Loans Pending Securitization','Credit Derivatives Sold',\
-             'Credit Derivatives Purchased','On-Balance Sheet Exposure','On-Balance Sheet Exposure',\
+row_names = ['Securitization Income','Credit Derivatives Sold',\
+             'Credit Derivatives Purchased',\
              'Assets Sold and Securitized','Asset Sold and Not Securitized',\
-             'Credit Exposure Other Parties','Total Asset Sec. Vehicles','Total Assets ABCP Conduits',\
+             'Credit Exposure Other Parties','Total Asset Securitization Vehicles','Total Assets ABCP Conduits',\
              'Total Assets Other','HDMA Sold To GSE','HMDA Sold to Private',\
              'HMDA Securitized','Total Assets']
 ss.index = row_names
+
+#--------------------------------------------
+# Structure of the securitization data
+#--------------------------------------------
+
+# Count number of securitizers per year
+num_sec = df[['date'] + vars_tot].groupby(df.date).apply(lambda x: np.sum(x>0))
+
+# Get percentages
+perc_sec = num_sec.apply(lambda x: round(x[1:] / x[0] * 100, 2), axis = 1)
+
+# Combine number and percentage
+numperc_sec = pd.DataFrame(num_sec.iloc[:,0])
+
+for col in range(perc_sec.shape[1]):
+    numperc_sec.insert(col + 1, num_sec.iloc[:,col + 1].name, num_sec.iloc[:,col + 1].astype(str) + ' (' + perc_sec.iloc[:,col].astype(str) + '\%)', True)
+
+# Change column labels
+num_sec.columns = ['N'] + row_names
+numperc_sec.columns = ['N'] + row_names
+
+# remove index name
+num_sec.index.name = None
+numperc_sec.index.name = None
+
+#--------------------------------------------
+# Summary Statistics Other variables
+#--------------------------------------------
+
+# Set Variables needed
+vars_oth = df_oth.columns[2:].tolist()
+vars_oth.remove('ta')
+
+# Get Summary Statistics
+ss_oth = df[vars_oth].describe().T[['mean','std']]
+
+## round and add thousand seperators
+ss_oth.iloc[:,0] = ss_oth.iloc[:,0].round(4)
+ss_oth.iloc[:,1] = ss_oth.iloc[:,1].round(4)
+
+ss_oth.iloc[0,0] = "{:,}".format(ss_oth.iloc[0,0].round(2))
+ss_oth.iloc[0,1] = "{:,}".format(ss_oth.iloc[0,1].round(2))
+
+# Change column names
+ss_oth.columns = ['Mean','SD']
+
+# Change row names
+row_names_oth = ['Operational income', 'Liquidity Ratio',\
+            'Trading asset ratio', 'Loan Ratio',\
+            'Loans-to-deposits', 'Deposit ratio',\
+            'Capital ratio', 'Real estate loan ratio',\
+            'Commercial and industrial loan ratio', 'Agricultural loan ratio',\
+            'Consumer loan ratio', 'Other loan ratio',\
+            'loan HHI', 'Tier 1 leverage ratio',\
+            'Tier 1 capital ratio', 'Total regulatory capital ratio',\
+            'RWA/TA', 'NPL Ratio',\
+            'Charge-off ratio', 'Allowance ratio',\
+            'Provision ratio', 'Interest expense / Total liabilities',\
+            'Interest expense deposits / Total deposits',\
+            'Return on equity', 'Return on assets',\
+            'Net interest margin', 'Cost to income',\
+            'Revenue HHI', 'Non-insterest income / net operating revenue',\
+            'Interest income: loans', 'Interest income: depository institutions',\
+            'Interest income: securities', 'Interest income: trading assets',\
+            'Interest income: repo', 'Interest income: other',\
+            'Interest income HHI', 'Interest expenses: deposits',\
+            'Interest expenses: repo', 'Interest expenses: Trading liabilities',\
+            'Interest expenses: subordinated notes', 'Interest expenses HHI',]
+ss_oth.index = row_names_oth
 
 #------------------------------------------------------------
 # To Latex
@@ -82,7 +150,7 @@ def resultsToLatex(results, caption = '', label = '', size_string = '\\scriptsiz
     # Prelim
     function_parameters = dict(na_rep = '',
                                index_names = True,
-                               column_format = 'p{4cm}' + 'p{1cm}' * results.shape[1],
+                               column_format = 'p{5cm}' + 'p{2cm}' * results.shape[1],
                                escape = False,
                                multicolumn = True,
                                multicolumn_format = 'c',
@@ -122,21 +190,71 @@ def resultsToLatex(results, caption = '', label = '', size_string = '\\scriptsiz
     return latex_table
 
 # Call function
-caption = 'Summary Statistics'
-label = 'tab:summary_statistics'
-size_string = '\\tiny \n'
-note = "\\textit{Notes.} Summary statistics of the securitization proxies."
+## Securitization summary statistics
+caption = 'Summary Statistics Securitization Proxies'
+label = 'tab:summary_statistics_proxies'
+size_string = '\\footnotesize \n'
+note = "\\textit{Notes.} Summary statistics of the securitization proxies. All numbers are in thousands USD."
 
 ss_latex = resultsToLatex(ss, caption, label,\
                                  size_string = size_string, note_string = note,\
+                                 sidewaystable = False)
+
+# Number and percentage securitization
+caption_num_sec = 'Number of Securitizers Per Proxy'
+label_num_sec = 'tab:number_securitizers'
+size_string_num_sec = '\\tiny \n'
+note_num_sec = "\\textit{Notes.} Total is the number of banks in the sample per year."
+
+num_sec_latex = resultsToLatex(num_sec, caption_num_sec, label_num_sec,\
+                                 size_string = size_string_num_sec, note_string = note_num_sec,\
+                                 sidewaystable = True)
+
+caption_numperc_sec = 'Number and Percentage of Securitizers Per Proxy'
+label_numperc_sec = 'tab:number_Percentage_securitizers'
+size_string_numperc_sec = '\\tiny \n'
+note_numperc_sec = "\\textit{Notes.} Total is the number of banks in the sample per year."
+numperc_sec_latex = resultsToLatex(numperc_sec, caption_numperc_sec, label_numperc_sec,\
+                                 size_string = size_string_numperc_sec, note_string = note_numperc_sec,\
+                                 sidewaystable = True)
+    
+## Control Variables summary statistics
+caption_oth = 'Summary Statistics Control Variables'
+label_oth = 'tab:summary_control'
+size_string_oth = '\\footnotesize \n'
+note_oth = "\\textit{Notes.} All variables besides Operational income are in percentages. Operational income is in thousands USD."
+
+ss_oth_latex = resultsToLatex(ss_oth, caption_oth, label_oth,\
+                                 size_string = size_string_oth, note_string = note_oth,\
                                  sidewaystable = False)
 
 #------------------------------------------------------------
 # Save
 #------------------------------------------------------------
 
+# Securitization summary statistics
 ss.to_excel('Tables/Summary_statistics.xlsx')
 
-text_ss_tot_latex = open('Tables/Summary_statistics.tex', 'w')
-text_ss_tot_latex.write(ss_latex)
-text_ss_tot_latex.close()
+text_ss_latex = open('Tables/Summary_statistics.tex', 'w')
+text_ss_latex.write(ss_latex)
+text_ss_latex.close()
+
+# Number and percentage securitization
+num_sec.to_excel('Tables/Number_securitizers.xlsx')
+
+text_num_sec_latex = open('Tables/Number_securitizers.tex', 'w')
+text_num_sec_latex.write(num_sec_latex)
+text_num_sec_latex.close()
+
+numperc_sec.to_excel('Tables/Number_percentage_securitizers.xlsx')
+
+text_numperc_sec_latex = open('Tables/Number_percentage_securitizers.tex', 'w')
+text_numperc_sec_latex.write(numperc_sec_latex)
+text_numperc_sec_latex.close()
+
+# Control Variables summary statistics
+ss_oth.to_excel('Tables/Summary_statistics_control.xlsx')
+
+text_ss_oth_latex = open('Tables/Summary_statistics_control.tex', 'w')
+text_ss_oth_latex.write(ss_oth_latex)
+text_ss_oth_latex.close()

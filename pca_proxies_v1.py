@@ -55,8 +55,7 @@ vars_cr = df.columns[df.columns.str.contains('cr')].tolist()
 vars_hmda = df.columns[df.columns.str.contains('hmda')].tolist()
 
 ## Total
-vars_tot = vars_cr + vars_hmda + ['RC2170']
-vars_tot.remove('cr_ta_vie')
+vars_tot = vars_cr + vars_hmda + ['ta']
 
 # standardize data
 df_standard = preprocessing.scale(df[vars_tot])

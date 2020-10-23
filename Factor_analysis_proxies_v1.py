@@ -56,8 +56,7 @@ vars_cr = df.columns[df.columns.str.contains('cr')].tolist()
 vars_hmda = df.columns[df.columns.str.contains('hmda')].tolist()
 
 ## Total
-vars_tot = vars_cr + vars_hmda + ['RC2170']
-vars_tot.remove('cr_ta_vie')
+vars_tot = vars_cr + vars_hmda + ['ta']
 
 # standardize data
 df_standard = preprocessing.scale(df[vars_tot])
@@ -78,7 +77,7 @@ df_standard = preprocessing.scale(df[vars_tot])
 bartlett_chi ,bartlett_p = calculate_bartlett_sphericity(df[vars_tot]) # p = 0.0
 
 ## Kaiser-Meyer-Olkin (KMO) test. Measures data suitability; should be between 0 and 1, but above 0.6
-kmo_all, kmo_model = calculate_kmo(df[vars_tot]) #kmo_model = 0.604
+kmo_all, kmo_model = calculate_kmo(df[vars_tot]) #kmo_model = 0.7297
 
 #--------------------------------------------
 # Factor Analysis

@@ -127,7 +127,7 @@ vars_rcn = '|'.join(['IDRSSD','F172', 'F174', 'F176', 'F173', 'F175', 'F177',\
                      '1226','1227','1228'])
 
 ## RC-R
-vars_rcr = '|'.join(['IDRSSD','7204','7205','7206', 'A223'])
+vars_rcr = '|'.join(['IDRSSD','7204','7205','7206', 'A223', '8274'])
 
 #--------------------------------------------
 # Set functions
@@ -204,7 +204,12 @@ def loadRCR(i):
 # Functions to combine variables
 def combineVars(data, elem):
     ''' Function to combine RCFD and RCON into one variable '''
-    data['RC' + elem] = data.apply(lambda x: x['RCFD' + elem] if not np.isnan(x['RCFD' + elem]) and  round(x['RCFD' + elem]) != 0 else (x['RCON' + elem]), axis = 1) 
+    data['RC' + elem] = data['RCFD' + elem].fillna(data['RCON' + elem])
+    
+    return(data['RC' + elem])
+
+def combineVarsAlt(data, elem):
+    data['RC' + elem] = data['RCF' + elem].fillna(data['RCO' + elem])
     
     return(data['RC' + elem])
 
@@ -237,26 +242,36 @@ df_raw = df_ri.set_index(['IDRSSD','date']).join([df_rib.set_index(['IDRSSD','da
 # Get double variable
 ## NOTE: Don't use RCFN
 vars_raw = df_raw.columns[~df_raw.columns.str.contains('RCFN|RCOA|RCOW|RCFA|RCFW')].str[4:]
-var_num = [item for item, count in collections.Counter(vars_raw).items() if count > 1]
+var_num_raw = [item for item, count in collections.Counter(vars_raw).items() if count > 1]
+
+## Remove the regulatory variables
+var_num_reg = ['7204','7205','7206', 'A223']
+var_num = [item for item in var_num_raw if item not in var_num_reg]
 
 # Combine variables
 if __name__ == '__main__':
     df_raw_combvars = pd.concat(Parallel(n_jobs=num_cores)(delayed(combineVars)(df_raw, elem) for elem in var_num), axis = 1)
 
 ## Transform regulatory data 
+### Drop variables not needed
+vars_drop = '|'.join(['RCFW','RCOW'])
+df_rcr = df_rcr.loc[:,~df_rcr.columns.str.contains(vars_drop)]
+
 ### Transform RCFA and RCOA to float
 vars_trans = '|'.join(['RCFA7','RCOA7'])
 df_rcr.loc[:,df_rcr.columns.str.contains(vars_trans)] = df_rcr.loc[:,df_rcr.columns.str.contains(vars_trans)].apply(lambda x: x.str.strip('%').astype(float) / 100)
 
-## #Make the variables
-var_num_reg = ['7204','7205','7206', 'A223']
-
+### Make the variables
 for elem in var_num_reg:
-    df_rcr['RCF{}'.format(elem)] = df_rcr.apply(lambda x: x['RCFA{}'.format(elem)] if x.date > 2014 else (x['RCFD{}'.format(elem)]), axis = 1)
-    df_rcr['RCO{}'.format(elem)] = df_rcr.apply(lambda x: x['RCOA{}'.format(elem)] if x.date > 2014 else (x['RCON{}'.format(elem)]), axis = 1) 
+    df_rcr['RCF{}'.format(elem)] = df_rcr.loc[:,['RCFA{}'.format(elem), 'RCFD{}'.format(elem)]].sum(axis = 1)
+    df_rcr['RCO{}'.format(elem)] = df_rcr.loc[:,['RCOA{}'.format(elem), 'RCON{}'.format(elem)]].sum(axis = 1)
+    
+if __name__ == '__main__':
+    df_rcr_combvars = pd.concat(Parallel(n_jobs=num_cores)(delayed(combineVarsAlt)(df_rcr, elem) for elem in var_num_reg), axis = 1)
 
-# Remove old variables
-cols_remove =  [col for col in df_raw.columns if not col[4:] in var_num]      
+# Remove old variables and make new df
+cols_remove =  [col for col in df_raw.columns if not col[4:] in var_num]
+df_raw_combvars[['RC{}'.format(elem) for elem in var_num_reg]] = np.array(df_rcr_combvars)       
 df = pd.concat([df_raw[cols_remove], df_raw_combvars], axis = 1) 
 
 #--------------------------------------------
@@ -282,7 +297,7 @@ df_clean['liq_ratio'] = df[['RC0071', 'RC0081', 'RC1754', 'RC1773']].sum(axis = 
 df_clean['trad_ratio'] = df.RC3545.divide(df.RC2170)
 
 # Loan Ratio
-df_clean['loan_ratio'] = df.RC2122.divide(df.RC2170)
+df_clean['loan_ratio'] = df[['RC2122', 'RC2123']].sum(axis = 1).divide(df.RC2170)
 
 # Loans-to-deposits
 ## NOTE: RC1400 == RC2122 + RC2123
@@ -376,6 +391,7 @@ df_clean['rev_hhi'] = df.RIAD4074.divide(df[['RIAD4074','RIAD4079']].sum(axis = 
 # Non-insterest income / net operating revenue 
 df_clean['nii_nor'] = df.RIAD4079.divide(df[['RIAD4074','RIAD4079']].sum(axis = 1))
 
+'''
 # Interest income: loans
 df_clean['ii_loans'] = df[['RIAD4010','RIAD4065']].sum(axis = 1).divide(df.RIAD4107)
 
@@ -396,13 +412,14 @@ df_clean['ii_oth'] = df.RIAD4518.divide(df.RIAD4107)
 
 # Interest income HHI 
 df_clean['ii_hhi'] = df_clean.ii_loans**2 + df_clean.ii_depins**2 + df_clean.ii_sec**2 +\
-                     df_clean.ii_trad**2 + df_clean.ii_repo**2 + df_clean.ii_oth**2
+                     df_clean.ii_repo**2 + df_clean.ii_oth**2
 
 # Interest expenses: deposits
 df_clean['ie_dep'] = df[['RIAD4508','RIAD0093','RIADA517', 'RIADA518']].sum(axis = 1).divide(df.RIAD4073)
 
 # Interest expenses: repo
 df_clean['ie_repo'] = df.RIAD4180.divide(df.RIAD4073)
+
 
 # Interest expenses: Trading liabilities and other borrowed money
 df_clean['ie_trad'] = df.RIAD4185.divide(df.RIAD4073)
@@ -412,7 +429,14 @@ df_clean['ie_sub'] = df.RIAD4200.divide(df.RIAD4073)
 
 # Interest expenses HHI
 df_clean['ie_hhi'] = df_clean.ie_dep**2 + df_clean.ie_repo**2 +\
-                     df_clean.ie_trad**2 + df_clean.ie_sub**2 
+                     df_clean.ie_trad**2 + df_clean.ie_sub**2
+'''
+
+#--------------------------------------------
+# Replace NaNs with zero
+#--------------------------------------------
+
+#df_clean.replace(np.nan, 0, inplace = True)
 
 #--------------------------------------------
 # Save Data

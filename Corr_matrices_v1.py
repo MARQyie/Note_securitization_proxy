@@ -43,7 +43,7 @@ df_sec = pd.read_csv('Data\df_sec_note.csv', index_col = 0)
 df_oth = pd.read_csv('Data\df_ri_rc_note.csv')
 
 # Merge data
-df = df_sec.merge(df_oth, how = 'inner', on = ['date','IDRSSD'])
+df = df_sec.merge(df_oth, how = 'left', on = ['date','IDRSSD'])
 
 #--------------------------------------------
 # Prelims
@@ -63,18 +63,28 @@ vars_tot = vars_cr + vars_hmda + ['ta']
 # Heatmap function
 #--------------------------------------------
 
-def heatmap(matrix, file, annot = True):
+def heatmap(matrix, pvals, file, annot = True):
     
     # Set aesthetics
-    dic_aes = {'annot' : annot,
-               'vmin' : -1,
-               'vmax' : 1,
-               'center': 0,
-               'cmap': 'coolwarm'}
+    dic_aes_masked = {'mask' : pvals > 0.05,
+                      'annot_kws': {"weight": "bold"},      
+                      'annot' : annot,
+                      'vmin' : -1,
+                      'vmax' : 1,
+                      'center': 0,
+                      'cmap': 'coolwarm'}
+    dic_aes_unmasked = {'mask' : pvals <= 0.05, 
+                      'annot' : annot,
+                      'vmin' : -1,
+                      'vmax' : 1,
+                      'center': 0,
+                      'cbar': False,
+                      'cmap': 'coolwarm'}
     
     # Make heatmap
-    fig, ax = plt.subplots(figsize=(24,16))  
-    sns.heatmap(matrix, **dic_aes)
+    fig, ax = plt.subplots(figsize=(24,16))
+    sns.heatmap(matrix, **dic_aes_unmasked)
+    sns.heatmap(matrix, **dic_aes_masked)
     plt.tight_layout()
     
     # Save heatmap
@@ -84,24 +94,21 @@ def heatmap(matrix, file, annot = True):
 # Correlation
 #--------------------------------------------
 
-# Total, not scaled
-## Get correlation matrix
-tot_ns_corr = df[vars_tot].corr(method = 'spearman')
-_, tot_ns_corr_pval = stats.spearmanr(df[vars_tot])
-
-## PLot
-heatmap(tot_ns_corr, 'Corr_tot_noscale.png')
-
-'''NOTE: 
-        1) Scaling barely affects the correlation (duh)
-        2) SDI variables correlate very strongly with the respective
-           Call Report variables. Probably due to the fact they are
-           designed to measure exactly the same thing. DROP SDI '''
            
 # Call Reports and HMDA, not scaled
 ## Get correlation matrix
-crhmda_ns_corr = df[vars_tot].corr(method = 'spearman')
-_, crhmda_ns_corr_pval = stats.spearmanr(df[vars_tot]) # Only one thing is insignficant: ABCP vs HMDA priv
+corr = df[vars_tot].corr(method = 'spearman')
+corr_pval = stats.spearmanr(df[vars_tot])[1] # Only one thing is insignficant: ABCP vs HMDA priv
+
+## Label columns and index
+labels = ['Sec. Income','CD Sold',\
+             'CD Purchased',\
+             'Assets Sold and Sec.','Asset Sold and Not Sec.',\
+             'Cred. Exp. Oth.','TA Sec. Veh.','TA ABCP','TA Oth. VIEs',\
+             'HDMA GSE','HMDA Private','HMDA Sec.','TA']
+
+corr.index = labels
+corr.columns = labels
 
 ## PLot
-heatmap(crhmda_ns_corr, 'Corr_crhmda_noscale.png')
+heatmap(corr, corr_pval, 'Corr.png')

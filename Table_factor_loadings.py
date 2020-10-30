@@ -46,7 +46,7 @@ row_names = ['Securitization Income','Credit Derivatives Sold',\
              'Credit Derivatives Purchased',\
              'Assets Sold and Securitized','Asset Sold and Not Securitized',\
              'Credit Exposure Other Parties','Total Asset Securitization Vehicles','Total Assets ABCP Conduits',\
-             'Total Assets Other','HDMA Sold To GSE','HMDA Sold to Private',\
+             'Total Assets Other VIEs','HDMA Sold To GSE','HMDA Sold to Private',\
              'HMDA Securitized','Total Assets']
 
 col_names = [('Quartimax Rotation','F1'), ('Quartimax Rotation','F2'),\

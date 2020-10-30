@@ -68,7 +68,7 @@ row_names = ['Securitization Income','Credit Derivatives Sold',\
              'Credit Derivatives Purchased',\
              'Assets Sold and Securitized','Asset Sold and Not Securitized',\
              'Credit Exposure Other Parties','Total Asset Securitization Vehicles','Total Assets ABCP Conduits',\
-             'Total Assets Other','HDMA Sold To GSE','HMDA Sold to Private',\
+             'Total Assets Other VIEs','HDMA Sold To GSE','HMDA Sold to Private',\
              'HMDA Securitized','Total Assets']
 ss.index = row_names
 
@@ -132,13 +132,7 @@ row_names_oth = ['Operational income', 'Liquidity Ratio',\
             'Interest expense deposits / Total deposits',\
             'Return on equity', 'Return on assets',\
             'Net interest margin', 'Cost to income',\
-            'Revenue HHI', 'Non-insterest income / net operating revenue',\
-            'Interest income: loans', 'Interest income: depository institutions',\
-            'Interest income: securities', 'Interest income: trading assets',\
-            'Interest income: repo', 'Interest income: other',\
-            'Interest income HHI', 'Interest expenses: deposits',\
-            'Interest expenses: repo', 'Interest expenses: Trading liabilities',\
-            'Interest expenses: subordinated notes', 'Interest expenses HHI',]
+            'Revenue HHI', 'Non-insterest income / net operating revenue']
 ss_oth.index = row_names_oth
 
 #------------------------------------------------------------
@@ -148,7 +142,18 @@ ss_oth.index = row_names_oth
 # Set function
 def resultsToLatex(results, caption = '', label = '', size_string = '\\scriptsize \n',  note_string = None, sidewaystable = False):
     # Prelim
-    function_parameters = dict(na_rep = '',
+    if results.shape == (14,9):
+        function_parameters = dict(na_rep = '',
+                               index_names = True,
+                               column_format = 'p{4.5cm}' + 'p{.65cm}' * results.shape[1],
+                               escape = False,
+                               multicolumn = True,
+                               multicolumn_format = 'c',
+                               caption = caption,
+                               label = label)
+  
+    else:
+        function_parameters = dict(na_rep = '',
                                index_names = True,
                                column_format = 'p{5cm}' + 'p{2cm}' * results.shape[1],
                                escape = False,
@@ -203,18 +208,18 @@ ss_latex = resultsToLatex(ss, caption, label,\
 # Number and percentage securitization
 caption_num_sec = 'Number of Securitizers Per Proxy'
 label_num_sec = 'tab:number_securitizers'
-size_string_num_sec = '\\tiny \n'
+size_string_num_sec = '\\scriptsize \n'
 note_num_sec = "\\textit{Notes.} Total is the number of banks in the sample per year."
 
-num_sec_latex = resultsToLatex(num_sec, caption_num_sec, label_num_sec,\
+num_sec_latex = resultsToLatex(num_sec.T, caption_num_sec, label_num_sec,\
                                  size_string = size_string_num_sec, note_string = note_num_sec,\
-                                 sidewaystable = True)
+                                 sidewaystable = False)
 
 caption_numperc_sec = 'Number and Percentage of Securitizers Per Proxy'
 label_numperc_sec = 'tab:number_Percentage_securitizers'
-size_string_numperc_sec = '\\tiny \n'
+size_string_numperc_sec = '\\scriptsize \n'
 note_numperc_sec = "\\textit{Notes.} Total is the number of banks in the sample per year."
-numperc_sec_latex = resultsToLatex(numperc_sec, caption_numperc_sec, label_numperc_sec,\
+numperc_sec_latex = resultsToLatex(numperc_sec.T, caption_numperc_sec, label_numperc_sec,\
                                  size_string = size_string_numperc_sec, note_string = note_numperc_sec,\
                                  sidewaystable = True)
     

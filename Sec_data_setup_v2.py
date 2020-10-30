@@ -158,7 +158,7 @@ def loadRCL(i):
 # Functions to combine variables
 def combineVars(data, elem):
     ''' Function to combine RCFD and RCON into one variable '''
-    data['RC' + elem] = data.apply(lambda x: x['RCFD' + elem] if not np.isnan(x['RCFD' + elem]) and  round(x['RCFD' + elem]) != 0 else (x['RCON' + elem]), axis = 1) 
+    data['RC' + elem] = data['RCFD' + elem].fillna(data['RCON' + elem])
     
     return(data['RC' + elem])
 

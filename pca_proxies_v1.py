@@ -74,7 +74,7 @@ princ_comp = pca.fit(df_standard)
 # Plot the principle components: variance explained
 fig, ax = plt.subplots(figsize=(20,12)) 
 ax.set(ylabel='Variance Explained (%)', xlabel = 'Principle Component')
-ax.bar(range(df_standard.shape[1]), princ_comp.explained_variance_ratio_ * 100)
+ax.bar(range(1, df_standard.shape[1] + 1), princ_comp.explained_variance_ratio_ * 100)
 plt.tight_layout()
 
 fig.savefig('Figures/Dimension_reduction/PCA_variance_explained.png')

@@ -84,13 +84,26 @@ kmo_all, kmo_model = calculate_kmo(df[vars_tot]) #kmo_model = 0.7297
 fa = FactorAnalyzer(rotation = None, n_factors = 3)
 fa.fit(df[vars_tot])
 ev, v = fa.get_eigenvalues()
+'''NOTE: First three factors have an eigen value greater than 1. Use those.'''
 
-fig, ax = plt.subplots(figsize=(20,12)) 
-ax.set(ylabel='Variance Explained (%)', xlabel = 'Factor')
-ax.bar(range(df_standard.shape[1]), ev / np.sum(ev))
+# Perform a parallel analysis
+list_ev_rand = []
+
+np.random.seed(10)
+for i in range(100):
+    df_rand = pd.DataFrame(np.random.rand(*df[vars_tot].shape))
+    fa_rand = FactorAnalyzer(rotation = None, n_factors = 3).fit(df_rand)
+    ev_rand, _ = fa_rand.get_eigenvalues()
+    list_ev_rand.append(ev_rand)
+
+fig, ax = plt.subplots(figsize=(15,9)) 
+ax.set(ylabel='Eigen Value', xlabel = 'Factor')
+ax.plot(range(1, df_standard.shape[1] + 1), ev, marker = 'o', label = 'Factor')
+ax.plot(range(1, df_standard.shape[1] + 1), np.mean(list_ev_rand,axis = 0), color = 'black', linestyle = '--', label = 'Parallel Analysis')
+ax.legend()
 plt.tight_layout()
 
-fig.savefig('Figures/Dimension_reduction/FA_variance_explained.png')
+fig.savefig('Figures/Dimension_reduction/FA_parallel.png')
 
 # Get the factor loadings
 fa_loadings = pd.DataFrame(fa.loadings_,\

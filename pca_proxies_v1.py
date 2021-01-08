@@ -72,7 +72,7 @@ pca = PCA()
 princ_comp = pca.fit(df_standard)
 
 # Plot the principle components: variance explained
-fig, ax = plt.subplots(figsize=(20,12)) 
+fig, ax = plt.subplots(figsize=(15,9)) 
 ax.set(ylabel='Variance Explained (%)', xlabel = 'Principle Component')
 ax.bar(range(1, df_standard.shape[1] + 1), princ_comp.explained_variance_ratio_ * 100)
 plt.tight_layout()
@@ -89,7 +89,7 @@ pc_loadings.to_csv('Results/pc_loadings_sec.csv')
 # Make plot
 w = 0.3
 x = np.array([float(i) for i in range(len(vars_tot))])
-fig, ax = plt.subplots(figsize=(20,12)) 
+fig, ax = plt.subplots(figsize=(15,9)) 
 ax.set(ylabel='Absolute Loadings', xlabel = 'Variable')
 ax.bar(x-w, pc_loadings.iloc[:,0].abs(), width = w, label = 'PC1')
 ax.bar(x, pc_loadings.iloc[:,1].abs(), width = w, label = 'PC2')

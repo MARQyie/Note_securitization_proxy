@@ -4,6 +4,8 @@
 # September 2020
 #--------------------------------------------
 
+# TODO check volgorde variabelen
+
 ''' This script makes correlation matrices for the securitization
     note. For all correlation matrices we use the Spearman's rank
     correlation coefficient, which is a nonparametric measure of rank
@@ -41,9 +43,10 @@ df_sec = pd.read_csv('Data\df_sec_note.csv', index_col = 0)
 
 ## Other data
 df_oth = pd.read_csv('Data\df_ri_rc_note.csv')
+df_oth['ta'] = np.exp(df_oth.ln_ta) - 1
 
 # Merge data
-df = df_sec.merge(df_oth, how = 'left', on = ['date','IDRSSD'])
+df = df_sec.merge(df_oth, how = 'inner', on = ['date','IDRSSD'])
 
 #--------------------------------------------
 # Prelims
@@ -101,7 +104,7 @@ corr = df[vars_tot].corr(method = 'spearman')
 corr_pval = stats.spearmanr(df[vars_tot])[1] # Only one thing is insignficant: ABCP vs HMDA priv
 
 ## Label columns and index
-labels = ['Sec. Income','CD Sold',\
+labels = ['Serv. Fees','Sec. Income','LS Income','CD Sold',\
              'CD Purchased',\
              'Assets Sold and Sec.','Asset Sold and Not Sec.',\
              'Cred. Exp. Oth.','TA Sec. Veh.','TA ABCP','TA Oth. VIEs',\

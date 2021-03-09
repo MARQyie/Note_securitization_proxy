@@ -42,16 +42,16 @@ df_v = pd.read_csv('Results/fa_loadings_varimax_sec.csv', index_col = 0)
 #--------------------------------------------
 
 # Set row labels and column labels
-row_names = ['Securitization Income','Credit Derivatives Sold',\
+row_names = ['Net Servicing Fees','Securitization Income','Loan Sales Income','Credit Derivatives Sold',\
              'Credit Derivatives Purchased',\
              'Assets Sold and Securitized','Asset Sold and Not Securitized',\
              'Credit Exposure Other Parties','Total Asset Securitization Vehicles','Total Assets ABCP Conduits',\
              'Total Assets Other VIEs','HDMA Sold To GSE','HMDA Sold to Private',\
              'HMDA Securitized','Total Assets']
 
-col_names = [('Quartimax Rotation','F1'), ('Quartimax Rotation','F2'),\
-             ('Quartimax Rotation','F3'), ('Varimax Rotation','F1'),\
-             ('Varimax Rotation','F2'), ('Varimax Rotation','F3')]
+col_names = [('Quartimax Rotation','F1'), ('Quartimax Rotation','F2'), ('Quartimax Rotation','F3'),\
+             ('Quartimax Rotation','F4'), ('Varimax Rotation','F1'), ('Varimax Rotation','F2'),\
+             ('Varimax Rotation','F3'), ('Varimax Rotation','F4')]
 
 # Make new table
 df = pd.concat([df_q,df_v], axis = 1)
@@ -65,7 +65,7 @@ df = df.round(4)
 
 # Give boldface to loadings >0.5
 def boldLoading(loading, cutoff = 0.5):
-    if loading > cutoff:
+    if abs(loading) > cutoff:
         return '\textbf{' + str(loading) + '}'
     else:
         return str(loading)
@@ -81,7 +81,7 @@ def resultsToLatex(results, caption = '', label = '', size_string = '\\scriptsiz
     # Prelim
     function_parameters = dict(na_rep = '',
                                index_names = True,
-                               column_format = 'p{5cm}' + 'p{1.25cm}' * results.shape[1],
+                               column_format = 'p{4.5cm}' + 'p{1cm}' * results.shape[1],
                                escape = False,
                                multicolumn = True,
                                multicolumn_format = 'c',
@@ -127,7 +127,7 @@ def resultsToLatex(results, caption = '', label = '', size_string = '\\scriptsiz
 # Call function
 caption = 'Factor Loadings Quartimax and Varimax Rotations'
 label = 'tab:factor_loadings'
-size_string = '\\footnotesize \n'
+size_string = '\\scriptsize \n'
 note = "\\textit{Notes.} Factor loadings of the first three factors. "
 
 ss_latex = resultsToLatex(df_bold, caption, label,\

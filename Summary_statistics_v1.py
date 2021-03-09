@@ -1,7 +1,7 @@
 #--------------------------------------------
 # Summary Statistics for Note
 # Mark van der Plaat
-# September 2020
+# September 2020 -- Update: March 2021
 #--------------------------------------------
 
 #--------------------------------------------
@@ -31,6 +31,7 @@ df_sec = pd.read_csv('Data\df_sec_note.csv', index_col = 0)
 
 ## Other data
 df_oth = pd.read_csv('Data\df_ri_rc_note.csv')
+df_oth['ta'] = np.exp(df_oth.ln_ta) - 1
 
 # Merge data
 df = df_sec.merge(df_oth, how = 'inner', on = ['date','IDRSSD'])
@@ -64,7 +65,7 @@ ss.iloc[:,1] = ss.iloc[:,1].round(2).apply(lambda x : "{:,}".format(x))
 ss.columns = ['Mean','SD']
 
 # Change row names
-row_names = ['Securitization Income','Credit Derivatives Sold',\
+row_names = ['Net Servicing Fees','Securitization Income','Loan Sales Income','Credit Derivatives Sold',\
              'Credit Derivatives Purchased',\
              'Assets Sold and Securitized','Asset Sold and Not Securitized',\
              'Credit Exposure Other Parties','Total Asset Securitization Vehicles','Total Assets ABCP Conduits',\
@@ -77,7 +78,7 @@ ss.index = row_names
 #--------------------------------------------
 
 # Count number of securitizers per year
-num_sec = df[['date'] + vars_tot].groupby(df.date).apply(lambda x: np.sum(x>0))
+num_sec = df[['date'] + vars_tot].groupby(df.date).apply(lambda x: np.sum(abs(x)>0))
 
 # Get percentages
 perc_sec = num_sec.apply(lambda x: round(x[1:] / x[0] * 100, 2), axis = 1)
@@ -101,8 +102,8 @@ numperc_sec.index.name = None
 #--------------------------------------------
 
 # Set Variables needed
-vars_oth = df_oth.columns[2:].tolist()
-vars_oth.remove('ta')
+vars_oth = ['zscore','nim','cti','liq_ratio','loan_ratio','gap']
+
 
 # Get Summary Statistics
 ss_oth = df[vars_oth].describe().T[['mean','std']]
@@ -118,21 +119,7 @@ ss_oth.iloc[0,1] = "{:,}".format(ss_oth.iloc[0,1].round(2))
 ss_oth.columns = ['Mean','SD']
 
 # Change row names
-row_names_oth = ['Operational income', 'Liquidity Ratio',\
-            'Trading asset ratio', 'Loan Ratio',\
-            'Loans-to-deposits', 'Deposit ratio',\
-            'Capital ratio', 'Real estate loan ratio',\
-            'Commercial and industrial loan ratio', 'Agricultural loan ratio',\
-            'Consumer loan ratio', 'Other loan ratio',\
-            'loan HHI', 'Tier 1 leverage ratio',\
-            'Tier 1 capital ratio', 'Total regulatory capital ratio',\
-            'RWA/TA', 'NPL Ratio',\
-            'Charge-off ratio', 'Allowance ratio',\
-            'Provision ratio', 'Interest expense / Total liabilities',\
-            'Interest expense deposits / Total deposits',\
-            'Return on equity', 'Return on assets',\
-            'Net interest margin', 'Cost to income',\
-            'Revenue HHI', 'Non-insterest income / net operating revenue']
+row_names_oth = ['Z-score','Net Interest Margin','Costs-to-Income','Liquidity Ratio','Loan Ratio','GAP']
 ss_oth.index = row_names_oth
 
 #------------------------------------------------------------
@@ -142,7 +129,7 @@ ss_oth.index = row_names_oth
 # Set function
 def resultsToLatex(results, caption = '', label = '', size_string = '\\scriptsize \n',  note_string = None, sidewaystable = False):
     # Prelim
-    if results.shape == (14,9):
+    if results.shape == (16,9):
         function_parameters = dict(na_rep = '',
                                index_names = True,
                                column_format = 'p{4.5cm}' + 'p{.65cm}' * results.shape[1],
@@ -227,7 +214,7 @@ numperc_sec_latex = resultsToLatex(numperc_sec.T, caption_numperc_sec, label_num
 caption_oth = 'Summary Statistics Control Variables'
 label_oth = 'tab:summary_control'
 size_string_oth = '\\footnotesize \n'
-note_oth = "\\textit{Notes.} All variables besides Operational income are in percentages. Operational income is in thousands USD."
+note_oth = "\\textit{Notes.} All numbers are in percentages except Z-score and GAP. For the variable construction see Table XXX"
 
 ss_oth_latex = resultsToLatex(ss_oth, caption_oth, label_oth,\
                                  size_string = size_string_oth, note_string = note_oth,\

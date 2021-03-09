@@ -62,14 +62,11 @@ vars_cr = df.columns[df.columns.str.contains('cr')].tolist()
 vars_hmda = df.columns[df.columns.str.contains('hmda')].tolist()
 
 ## Total
-vars_tot = vars_cr + vars_hmda + ['ta']
+vars_tot = vars_cr + vars_hmda + ['ln_ta']
 
 # Set variables
-vars_oth = ['t1_reglev', 't1_regcap', 'cap_ratio', 'dep_ratio', 'loan_ratio',\
-            'ra_ratio', 'ci_ratio', 'agri_ratio', 'cons_ratio', 'othl_ratio',\
-            'loan_hhi', 'roa', 'liq_ratio', 'cti', 'nii_nor', 'rwata', 'npl',\
-            'co_ratio', 'all_ratio', 'prov_ratio']
-    
+vars_oth = ['zscore','nim','cti','liq_ratio','loan_ratio','gap']
+
 #--------------------------------------------
 #  Define function
 #--------------------------------------------
@@ -147,10 +144,10 @@ def PCorr(S, C):
 # Scale the securitization variables.
 ## NOTE: divide all variables with TA, except TA. Take logs of TA
 for var in vars_tot:
-    if var == 'ta':
+    if var == 'ln_ta':
         df[var] = np.log(df[var])
     else:
-        df[var] = df[var].divide(df.ta)
+        df[var] = df[var].divide(np.exp(df.ln_ta) - 1)
 
 # Drop na
 df.dropna(inplace = True)
@@ -163,15 +160,9 @@ p_corr, p_corr_pval = PCorr(df[vars_tot], df[vars_oth])
 #--------------------------------------------
 
 # Set column and labels
-index_labels = ['T1 lev.', 'T1 cap.', 'Cap. Ratio',\
-                'Dep. ratio', 'Loan Ratio','RA ratio',\
-                'CI ratio', 'Agri. ratio',\
-                'Cons. ratio', 'Other loan ratio', 'loan HHI',\
-                'ROA', 'Liq. Ratio', 'CTI',\
-                'NII/NOR', 'RWA/TA', 'NPL Ratio',\
-                'Charge-off', 'Allowance', 'Provision']
+index_labels = ['Z-score','Net Interest Margin','Costs-to-Income','Liquidity Ratio','Loan Ratio','GAP']
     
-column_labels = ['Sec. Income','CD Sold',\
+column_labels =  ['Serv. Fees','Sec. Income','LS Income','CD Sold',\
              'CD Purchased',\
              'Assets Sold and Sec.','Asset Sold and Not Sec.',\
              'Cred. Exp. Oth.','TA Sec. Veh.','TA ABCP','TA Oth. VIEs',\

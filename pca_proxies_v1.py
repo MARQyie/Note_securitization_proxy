@@ -39,6 +39,7 @@ df_sec = pd.read_csv('Data\df_sec_note.csv', index_col = 0)
 
 ## Other data
 df_oth = pd.read_csv('Data\df_ri_rc_note.csv')
+df_oth['ta'] = np.exp(df_oth.ln_ta) - 1
 
 # Merge data
 df = df_sec.merge(df_oth, how = 'inner', on = ['date','IDRSSD'])

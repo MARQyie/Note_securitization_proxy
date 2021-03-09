@@ -38,7 +38,7 @@ os.chdir(r'D:\RUG\PhD\Materials_papers\01-Note_on_securitization')
 
 # Set start and end date
 start = 2011
-end = 2020
+end = 2020 
 
 # Get the number of cores
 num_cores = mp.cpu_count()
@@ -95,7 +95,7 @@ file_rcv = r'/{}/FFIEC CDR Call Schedule RCV 1231{}.txt'
 vars_info = ['IDRSSD', 'RSSD9048', 'RSSD9424', 'RSSD9210']
 
 ## RI
-vars_ri = '|'.join(['IDRSSD','B493'])
+vars_ri = '|'.join(['IDRSSD','B492','B493','5416'])
 
 ## RC-D
 vars_rcd = '|'.join(['IDRSSD','F654'])
@@ -208,7 +208,6 @@ df_cr = df_cr_raw[(df_cr_raw.RSSD9048 == 200) & (df_cr_raw.RSSD9424 != 0)]
 ## Only take US states, no territories
 ''' Based on the state codes provided by the FRB'''
 df_cr = df_cr[df_cr.RSSD9210.isin(range(1,57))]
-    
 
 #--------------------------------------------
 # Home Mortgage Disclosure Act
@@ -228,9 +227,12 @@ path_hmda_panel = r'D:/RUG/Data/Data_HMDA/Panel/'
 
 # Get file names
 file_lf = r'hmdpanel17.dta'
+file_lf18 = r'hmdpan2018b.dta' 
+file_lf19 = r'hmdpan2019b.dta' 
 file_hmda_1017 = r'hmda_{}_nationwide_originated-records_codes.zip'
 file_hmda_1819 = r'year_{}.csv'
-file_hmda_panel = r'{}_public_panel_csv.csv'
+#file_hmda_panel_1017 = r'hmda_{}_panel.zip'
+file_hmda_panel_1819 = r'{}_public_panel_csv.csv'
 
 ## Set d-types and na-vals for HMDA LAR
 dtypes_col_hmda = {'state_code':'str', 'county_code':'str'}
@@ -239,8 +241,39 @@ na_values = ['NA   ', 'NA ', '...',' ','NA  ','NA      ','NA     ','NA    ','NA'
 # Get variable names
 vars_hmda = ['respondent_id', 'hmda_gse_amount', 'hmda_priv_amount',\
              'hmda_sec_amount', 'loan_amount_000s']
-vars_hmda_panel = ['lei', 'arid_2017', 'tax_id']
+#vars_hmda_panel_1017 = ['Respondent ID','parent_rssd']
+vars_hmda_panel_1819 = ['lei', 'arid_2017', 'tax_id']
 vars_lf = ['hmprid'] + ['ENTITY{}'.format(str(year)[2:4]) for year in range(start, end - 2)]
+
+# df LF
+df_lf = pd.read_stata(path_lf + file_lf, columns = vars_lf)
+df_lf18 = pd.read_stata(path_lf + file_lf18, columns = ['hmprid', 'ENTITY18'])
+df_lf19 = pd.read_stata(path_lf + file_lf19, columns = ['hmprid', 'ENTITY19'])
+
+# Reduce dimensions df_lf
+df_lf.dropna(how = 'all', subset = vars_lf[1:], inplace = True) # drop rows with all na
+df_lf = df_lf[~(df_lf[vars_lf[1:]] == 0.).any(axis = 1)] # Remove ENTITY with value 0.0
+df_lf18 = df_lf18[~(df_lf18['ENTITY18'] == 0.)] 
+df_lf19 = df_lf19[~(df_lf19['ENTITY19'] == 0.)]
+
+df_lf = df_lf[df_lf[vars_lf[1:]].all(axis = 1)] # Drop rows that have different column values (nothing gets deleted: good)
+
+# Reshape
+lf_reshaped_list = [df_lf.loc[:,df_lf.columns.str.contains('hmprid|{}'.format(year))].dropna().rename(columns = {'ENTITY{}'.format(year):'entity'}) for year in range(11, 17 + 1)]
+
+# Add dates
+for  i, year in zip(range(len(range(2011, 2017 + 1))),range(2011, 2017 + 1)):
+    lf_reshaped_list[i]['date'] = year
+    
+# Add 2018 and 2019
+lf_reshaped_list.append(df_lf18.dropna().rename(columns = {'ENTITY{}'.format(18):'entity'}))
+lf_reshaped_list[-1]['date'] = 2018
+
+lf_reshaped_list.append(df_lf19.dropna().rename(columns = {'ENTITY{}'.format(19):'entity'}))
+lf_reshaped_list[-1]['date'] = 2019
+
+# Make df
+df_lf_reshaped = pd.concat(lf_reshaped_list)
 
 #--------------------------------------------
 # Set functions
@@ -251,11 +284,14 @@ def loadCleanHMDA(year):
         df_chunk = pd.read_csv(path_hmda + file_hmda_1017.format(year),\
                                index_col = 0, chunksize = 1e6, na_values = na_values,\
                                dtype = dtypes_col_hmda)
+        #df_panel = pd.read_csv(path_hmda_panel + file_hmda_panel_1017.format(year))
+        #df_panel.rename(columns = {'Respondent RSSD ID':'respondent_rssd',
+        #                           'Parent RSSD ID':'parent_rssd'}, inplace = True)
     else: # From 2018 onward structure of the data changes
         df_chunk = pd.read_csv(path_hmda + file_hmda_1819.format(year),\
                                index_col = 0, chunksize = 1e6, na_values = na_values,\
                                dtype = dtypes_col_hmda)
-        df_panel = pd.read_csv(path_hmda_panel + file_hmda_panel.format(year))
+        df_panel = pd.read_csv(path_hmda_panel + file_hmda_panel_1819.format(year))
         
     chunk_list = []  # append each chunk df here 
 
@@ -264,7 +300,7 @@ def loadCleanHMDA(year):
         # Merge with df_panel and change column names if year is 2018 or 2019
         if year >= 2018:
             ## Merge
-            chunk = chunk.merge(df_panel.loc[:,vars_hmda_panel], how = 'left', on = 'lei')
+            chunk = chunk.merge(df_panel.loc[:,vars_hmda_panel_1819], how = 'left', on = 'lei')
                     
             ## Add column of loan amount in thousand USD
             chunk['loan_amount_000s'] = chunk.loan_amount / 1e3
@@ -272,8 +308,8 @@ def loadCleanHMDA(year):
             ## Format respondent_id column  (form arid_2017: remove agency code (first string), and zero fill. Replace -1 with non)
             ## NOTE Fill the missings with the tax codes. After visual check, some arid_2017 are missing. However, the tax_id corresponds to the resp_id pre 2018
             chunk['respondent_id'] = chunk.apply(lambda x: x.tax_id if x.arid_2017 == '-1' else str(x.arid_2017)[1:], axis = 1).replace('-1',np.nan).str.zfill(10)
-            
-        # Filter data
+        
+                # Filter data
         ## Make a fips column and remove separate state and county
         if year < 2018:
             chunk['fips'] = chunk['state_code'].str.zfill(2) + chunk['county_code'].str.zfill(3)
@@ -282,13 +318,13 @@ def loadCleanHMDA(year):
     
         ## Add variables
         ''' List of new vars
-            Dummies loan sales, securitizatioin
+            Dummies loan sales, securitization
             Amounts loan sales, securitization
         '''
         
         ### Loan sale dummies
         chunk['hmda_gse_dum'] = (chunk.purchaser_type.isin(range(1,4+1))) * 1
-        chunk['hmda_priv_dum'] = (chunk.purchaser_type.isin(list(range(1,9+1)) + [71, 72])) * 1
+        chunk['hmda_priv_dum'] = (chunk.purchaser_type.isin(list(range(6,9+1)) + [71, 72])) * 1
         chunk['hmda_sec_dum'] = (chunk.purchaser_type == 5) * 1
         
         ### Loan sale amount
@@ -307,9 +343,12 @@ def loadCleanHMDA(year):
         
     # concat the list into dataframe
     chunk_concat = pd.concat(chunk_list)
-
-    ## Aggregate data
-    chunk_agg = chunk_concat.groupby('respondent_id').sum()
+    
+    # Add the reshaped lender file
+    chunk_concat = chunk_concat.merge(df_lf_reshaped[df_lf_reshaped.date == year][['hmprid', 'entity']], how = 'left', left_on = 'respondent_id',right_on = 'hmprid')
+    
+    ## Aggregate data on RSSD
+    chunk_agg = chunk_concat.groupby('entity').sum()
     
     ## Add a date var
     chunk_agg['date'] = year
@@ -318,65 +357,20 @@ def loadCleanHMDA(year):
 
 #--------------------------------------------
 # Get data
-    
+
 # Run function
 if __name__ == '__main__':    
     df_hmda = pd.concat(Parallel(n_jobs=num_cores)(delayed(loadCleanHMDA)(i) for i in range(start, end)))
-
-# df LF
-df_lf = pd.read_stata(path_lf + file_lf, columns = vars_lf)
-
-# Reduce dimensions df_lf
-df_lf.dropna(how = 'all', subset = vars_lf[1:], inplace = True) # drop rows with all na
-df_lf = df_lf[~(df_lf[vars_lf[1:]] == 0.).any(axis = 1)] # Remove ENTITY with value 0.0
-df_lf = df_lf[df_lf[vars_lf[1:]].all(axis = 1)] # Drop rows that have different column values (nothing gets deleted: good)
 
 #--------------------------------------------
 # Merge Data
 #--------------------------------------------
 
-''' Merging procedure is as follows:
-        1) Merge SDI dataframe with the lenderfile on FDIC certificate number --> df_sdilf
-            Since the LF has a wide structure, we need to loop over the years
-        2) Merge the HMDA data with df_dfilf on FDIC certificate number --> df_hmdasdi
-        3) Merge df_hmdasdi with the Call Reports data on ID RSSD --> df_raw
-    '''
-
-#--------------------------------------------
-# Set functions
-    
-def mergeCallReportsLF(year):
-    '''Function to merge SDI and LF'''
-    ## Prelims
-    if year < 2018:
-        entity = 'ENTITY{}'.format(str(year)[2:4])
-    else:
-        entity = 'ENTITY17'
-       
-    ## Merge on year
-    df_load = df_cr.reset_index()[df_cr.reset_index().date == year].merge(df_lf.dropna(subset = [entity]),\
-                            how = 'left', left_on = 'IDRSSD',\
-                            right_on = entity)
-    
-    ## Return concatenated pd DataFrame
-    return (df_load)
-
-#--------------------------------------------
-# Merge data
-    
-# 1) CR LF
-if __name__ == "__main__":
-    df_crlf = pd.concat(Parallel(n_jobs=num_cores)(delayed(mergeCallReportsLF)(year) for year in range(start,end)))
-    
-## Drop ENTITY.. columns and drop nans in hmprid
-df_crlf = df_crlf[df_crlf.columns[~df_crlf.columns.str.contains('ENTITY')]].dropna(subset = ['hmprid'])
-
 # 2) CR HMDA
-df_raw = df_crlf.reset_index().merge(df_hmda, left_on = ['date','hmprid'],\
-                            right_on = ['date','respondent_id'], how = 'left')
+df_cr.reset_index(inplace = True)
 
-## Drop na in hmprid
-df_raw.dropna(subset = ['hmprid'], inplace = True)
+df_raw = df_cr.reset_index().merge(df_hmda, left_on = ['date','IDRSSD'],\
+                            right_on = ['date','entity'], how = 'left')
 
 #--------------------------------------------
 # make new df
@@ -390,6 +384,9 @@ df = df_raw[['date','IDRSSD', 'hmda_gse_amount', 'hmda_priv_amount',\
 #--------------------------------------------
 # Add new variables
 
+# Net servicing fees
+df['cr_serv_fees'] = df_raw.RIADB492
+
 # Net securitization income
 df['cr_sec_income'] = df_raw.RIADB493
 
@@ -397,6 +394,9 @@ df['cr_sec_income'] = df_raw.RIADB493
 # Loans pending securitization
 df['cr_sec_pending'] = df_raw.RCF654
 '''
+
+# Net gains loan sales
+df['cr_ls_income'] = df_raw.RIAD5416
 
 # Sold protection credit derivatives
 df['cr_cd_sold'] = df_raw.loc[:,['RCC968','RCC970','RCC972','RCC974']].sum(axis = 1)
@@ -444,6 +444,9 @@ df['cr_ta_vie_other'] = df_raw.loc[:,vars_vie_other].sum(axis = 1)
 #--------------------------------------------
 # Fill NA
 df.fillna(0, inplace = True)
+
+# Remove negative values in cr_sec_income and cr_ta_secveh
+df = df[df.cr_ta_secveh >= 0]
 
 #--------------------------------------------
 # Save Data

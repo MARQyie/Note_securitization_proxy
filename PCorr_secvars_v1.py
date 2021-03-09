@@ -2,7 +2,7 @@
 # Partial Correlation Matrix for Note
 # Between different sec. proxies only
 # Mark van der Plaat
-# September 2020
+# September 2020 -- Update: March 2021
 #--------------------------------------------
 
 #--------------------------------------------
@@ -63,13 +63,10 @@ vars_cr = df.columns[df.columns.str.contains('cr')].tolist()
 vars_hmda = df.columns[df.columns.str.contains('hmda')].tolist()
 
 ## Total
-vars_tot = vars_cr + vars_hmda + ['ta']
+vars_tot = vars_cr + vars_hmda + ['ln_ta']
 
 # Set variables
-vars_oth = ['t1_reglev', 't1_regcap', 'cap_ratio', 'dep_ratio', 'loan_ratio',\
-            'ra_ratio', 'ci_ratio', 'agri_ratio', 'cons_ratio', 'othl_ratio',\
-            'loan_hhi', 'roa', 'liq_ratio', 'cti', 'nii_nor', 'rwata', 'npl',\
-            'co_ratio', 'all_ratio', 'prov_ratio']
+vars_oth = ['zscore','nim','cti','liq_ratio','loan_ratio','gap']
     
 #--------------------------------------------
 #  Define function

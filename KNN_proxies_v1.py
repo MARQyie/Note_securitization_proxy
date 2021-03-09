@@ -1,7 +1,7 @@
 #--------------------------------------------
 # KNN for Note
 # Mark van der Plaat
-# September 2020
+# September 2020 -- Update: March 2021
 #--------------------------------------------
 
 #--------------------------------------------
@@ -15,7 +15,7 @@ import numpy as np
 # Plotting
 import matplotlib.pyplot as plt
 import seaborn as sns
-sns.set(style = 'whitegrid', font_scale = 2.5)
+sns.set(style = 'whitegrid', font_scale = 1.5)
 
 # Machine learning packages
 from sklearn.cluster import KMeans, AgglomerativeClustering
@@ -35,6 +35,7 @@ df_sec = pd.read_csv('Data\df_sec_note.csv', index_col = 0)
 
 ## Other data
 df_oth = pd.read_csv('Data\df_ri_rc_note.csv')
+df_oth['ta'] = np.exp(df_oth.ln_ta) - 1
 
 # Merge data
 df = df_sec.merge(df_oth, how = 'inner', on = ['date','IDRSSD'])
@@ -54,10 +55,7 @@ vars_hmda = df.columns[df.columns.str.contains('hmda')].tolist()
 vars_tot = vars_cr + vars_hmda + ['ta']
 
 # Set variables
-vars_oth = ['t1_reglev', 't1_regcap', 'cap_ratio', 'dep_ratio', 'loan_ratio',\
-            'ra_ratio', 'ci_ratio', 'agri_ratio', 'cons_ratio', 'othl_ratio',\
-            'loan_hhi', 'roa', 'liq_ratio', 'cti', 'nii_nor', 'rwata', 'npl',\
-            'co_ratio', 'all_ratio', 'prov_ratio']
+vars_oth = ['zscore','nim','cti','liq_ratio','loan_ratio','gap']
 
 # Drop na
 df.dropna(inplace = True)
@@ -70,7 +68,7 @@ df.dropna(inplace = True)
 # Determine number of clusters
 ## Dendrogram
 '''Uses a agglomerative hierarchical method of clustering to display the 
-    distance between each subsequent cluster '''
+    distance between each subsequent cluster. Uses the Wrd criterion. '''
 def plot_dendrogram(model, **kwargs):
     # Create linkage matrix and then plot the dendrogram
 
@@ -97,7 +95,7 @@ def plot_dendrogram(model, **kwargs):
 model = AgglomerativeClustering(distance_threshold=0, n_clusters=None)
 
 # Fit model
-model = model.fit(df[vars_tot + vars_oth])
+model = model.fit(df[vars_tot])
 plt.title('Hierarchical Clustering Dendrogram')
 
 # Plot
@@ -112,11 +110,12 @@ plt.close()
     sum of squares '''
 ### Initialize model and load package
 from yellowbrick.cluster import KElbowVisualizer
+sns.set(style = 'whitegrid', font_scale = 1.5)
 model = KMeans()
 
 ### Make the Elbow plot
 visualizer = KElbowVisualizer(model, k=(2,15), timings= True, size = (1500,900))
-visualizer.fit(df[vars_tot + vars_oth])        
+visualizer.fit(df[vars_tot])        
 visualizer.show('Figures/Cluster_analysis/WCSS.png')   
 plt.clf()
 
@@ -128,7 +127,7 @@ plt.xticks(np.arange(2,12,1))
 plt.tight_layout()
 fig.savefig('Figures/Cluster_analysis/WCSS.png') '''
 
-'''NOTE There is a clear elbow at three clusters. Proceed.
+'''NOTE There is a clear elbow at Five clusters. Proceed.
     '''
 ## Silhouette plot
 ### Initialize model
@@ -136,10 +135,10 @@ model = KMeans()
 
 ### Make the Silhouette plot
 visualizer = KElbowVisualizer(model, k=(2,15),metric='silhouette', timings= True, size = (1500,900))
-visualizer.fit(df[vars_tot + vars_oth])        
+visualizer.fit(df[vars_tot])        
 visualizer.show(outpath = 'Figures/Cluster_analysis/Silhouette.png')
 plt.clf()
-'''NOTE: elbow at 3 '''
+'''NOTE: elbow at 5 '''
 
 ## Calinski-Harabasz Index
 '''The Calinski-Harabasz Index is based on the idea that clusters that are 
@@ -150,7 +149,7 @@ model = KMeans()
 
 ## Make Calinski-Harabasz plot
 visualizer = KElbowVisualizer(model, k=(2,15),metric='calinski_harabasz', timings= True, size = (1500,900))
-visualizer.fit(df[vars_tot + vars_oth])        
+visualizer.fit(df[vars_tot])        
 visualizer.show(outpath = 'Figures/Cluster_analysis/Calinski_harabasz.png')
 plt.clf()
 
@@ -170,10 +169,10 @@ def get_kmeans_score(data, center):
     '''
     #instantiate kmeans
     kmeans = KMeans(n_clusters=center)# Then fit the model to your data using the fit method
-    model = kmeans.fit_predict(df[vars_tot + vars_oth])
+    model = kmeans.fit_predict(df[vars_tot])
     
     # Calculate Davies Bouldin score
-    score = davies_bouldin_score(df[vars_tot + vars_oth], model)
+    score = davies_bouldin_score(df[vars_tot], model)
     
     return score
 
@@ -182,7 +181,7 @@ scores = []
 centers = list(range(2,15))
 
 for center in centers:
-    scores.append(get_kmeans_score(df[vars_tot + vars_oth], center))
+    scores.append(get_kmeans_score(df[vars_tot], center))
     
 min_db = scores.index(min(scores))
 
@@ -194,16 +193,23 @@ ax.set(ylabel='Davies Bouldin score', xlabel = 'K')
 fig.savefig('Figures/Cluster_analysis/Davies_Bouldin.png')
 
 #--------------------------------------------
-# Run KNN algorithm with three clusters
-kmeans = KMeans(n_clusters=3)
-kmeans.fit(df[vars_tot + vars_oth])
+# Run KNN algorithm with three and 5 clusters
+kmeans3 = KMeans(n_clusters=3)
+kmeans3.fit(df[vars_tot])
+
+kmeans5 = KMeans(n_clusters=5)
+kmeans5.fit(df[vars_tot])
 
 ## Get centroids and transform to pandas DataFrame
-centroids  = kmeans.cluster_centers_ 
-centroids = pd.DataFrame(centroids, columns = vars_tot + vars_oth, index = ['C1','C2','C3']).T
+centroids3 = kmeans3.cluster_centers_ 
+centroids3 = pd.DataFrame(centroids3, columns = vars_tot, index = ['C1','C2','C3']).T
+
+centroids5 = kmeans5.cluster_centers_ 
+centroids5 = pd.DataFrame(centroids5, columns = vars_tot, index = ['C1','C2','C3','C4','C5']).T
 
 ## Get number of observations per cluster
-cluster_n = np.unique(kmeans.labels_, return_counts = True)[1]
+cluster_n3 = np.unique(kmeans3.labels_, return_counts = True)[1]
+cluster_n5 = np.unique(kmeans5.labels_, return_counts = True)[1]
 
 #--------------------------------------------
 # Latex table method
@@ -258,61 +264,61 @@ def resultsToLatex(results, caption = '', label = '', size_string = '\\scriptsiz
 
 # Concat centroids and cluster, label and round
 ## Concat
-df_clus = centroids.append(pd.DataFrame(cluster_n, index = ['C1','C2','C3'], columns = ['N']).T)
+df_clus3 = centroids3.append(pd.DataFrame(cluster_n3, index = ['C1','C2','C3'], columns = ['N']).T)
+
+df_clus5 = centroids5.append(pd.DataFrame(cluster_n5, index = ['C1','C2','C3','C4','C5'], columns = ['N']).T)
 
 # Round and add commas
 ## Divide proxies by 1e3
-df_clus.loc[vars_tot, :] = df_clus.loc[vars_tot, :].divide(1e3)
-df_clus.iloc[:,0] = df_clus.iloc[:,0].round(4).apply(lambda x : "{:,}".format(x))
-df_clus.iloc[:,1] = df_clus.iloc[:,1].round(4).apply(lambda x : "{:,}".format(x))
-df_clus.iloc[:,2] = df_clus.iloc[:,2].round(4).apply(lambda x : "{:,}".format(x))
+df_clus3.loc[vars_tot, :] = df_clus3.loc[vars_tot, :].divide(1e3)
+df_clus3.iloc[:,0] = df_clus3.iloc[:,0].round(4).apply(lambda x : "{:,}".format(x))
+df_clus3.iloc[:,1] = df_clus3.iloc[:,1].round(4).apply(lambda x : "{:,}".format(x))
+df_clus3.iloc[:,2] = df_clus3.iloc[:,2].round(4).apply(lambda x : "{:,}".format(x))
+
+df_clus5.loc[vars_tot, :] = df_clus5.loc[vars_tot, :].divide(1e3)
+df_clus5.iloc[:,0] = df_clus5.iloc[:,0].round(4).apply(lambda x : "{:,}".format(x))
+df_clus5.iloc[:,1] = df_clus5.iloc[:,1].round(4).apply(lambda x : "{:,}".format(x))
+df_clus5.iloc[:,2] = df_clus5.iloc[:,2].round(4).apply(lambda x : "{:,}".format(x))
+df_clus5.iloc[:,3] = df_clus5.iloc[:,3].round(4).apply(lambda x : "{:,}".format(x))
+df_clus5.iloc[:,4] = df_clus5.iloc[:,4].round(4).apply(lambda x : "{:,}".format(x))
 
 ## Labels
-labels = ['Sec. Income','CD Sold',\
-          'CD Purchased',\
-          'Assets Sold and Sec.','Asset Sold and Not Sec.',\
-          'Cred. Exp. Oth.','TA Sec. Veh.','TA ABCP','TA Other VIEs',\
-          'HDMA GSE','HMDA Private','HMDA Sec.','TA','T1 lev.',\
-              'T1 cap. ', 'Cap. Ratio',\
-          'Dep. ratio', 'Loan Ratio','RA ratio',\
-          'CI ratio', 'Agri. ratio',\
-          'Cons. ratio', 'Other loan ratio', 'loan HHI',\
-          'ROA', 'Liq. Ratio', 'CTI',\
-          'NII/NOR', 'RWA/TA', 'NPL Ratio',\
-          'Charge-off', 'Allowance', 'Provision', 'N']
-df_clus.index = labels
+labels =  ['Serv. Fees','Sec. Income','LS Income','CD Sold',\
+             'CD Purchased',\
+             'Assets Sold and Sec.','Asset Sold and Not Sec.',\
+             'Cred. Exp. Oth.','TA Sec. Veh.','TA ABCP','TA Oth. VIEs',\
+             'HDMA GSE','HMDA Private','HMDA Sec.','TA','N'] 
 
-# Split table
-df_clus_sec = df_clus.iloc[list(range(13)) + [-1],:] # Add N to the table
-df_clus_oth = df_clus.iloc[13:,:]
+df_clus3.index = labels
+df_clus5.index = labels
 
 # To latex
-caption_sec = 'Cluster Centroids: Securitization Proxies'
-label_sec = 'tab:cluster_centroids_sec'
+caption3 = 'Cluster Centroids: Securitization Proxies'
+label3 = 'tab:cluster_centroids3'
 size_string = '\\footnotesize \n'
-note_sec = "\\textit{Notes.} The cluster centroids are calculated with a K-means cluster algorithm, $K = 3$. In million USD."
+note3 = "\\textit{Notes.} The cluster centroids are calculated with a K-means cluster algorithm, $K = 3$. In million USD."
 
-caption_control = 'Cluster Centroids: Control Variables'
-label_control = 'tab:cluster_centroids_oth'
-note_control = "\\textit{Notes.} The cluster centroids are calculated with a K-means cluster algorithm, $K = 3$."
+caption5 = 'Cluster Centroids: Securitization Proxies (Five Clusters)'
+label5 = 'tab:cluster_centroids5'
+note5 = "\\textit{Notes.} The cluster centroids are calculated with a K-means cluster algorithm, $K = 5$. In million USD."
 
-df_clus_sec_latex = resultsToLatex(df_clus_sec, caption_sec, label_sec,\
-                                 size_string = size_string, note_string = note_sec,\
+df_clus3_latex = resultsToLatex(df_clus3, caption3, label3,\
+                                 size_string = size_string, note_string = note3,\
                                  sidewaystable = False)
 
-df_clus_oth_latex = resultsToLatex(df_clus_oth, caption_control, label_control,\
-                                 size_string = size_string, note_string = note_control,\
+df_clus5_latex = resultsToLatex(df_clus5, caption5, label5,\
+                                 size_string = size_string, note_string = note5,\
                                  sidewaystable = False)
     
 # Save
-df_clus_sec.to_excel('Tables/Cluster_centroids_sec.xlsx')
+df_clus3.to_excel('Tables/Cluster_centroids3.xlsx')
 
-text_ss_latex = open('Tables/Cluster_centroids_sec.tex', 'w')
-text_ss_latex.write(df_clus_sec_latex)
+text_ss_latex = open('Tables/Cluster_centroids3.tex', 'w')
+text_ss_latex.write(df_clus3_latex)
 text_ss_latex.close()
 
-df_clus_oth.to_excel('Tables/Cluster_centroids_control.xlsx')
+df_clus5.to_excel('Tables/Cluster_centroids5.xlsx')
 
-text_ss_latex = open('Tables/Cluster_centroids_control.tex', 'w')
-text_ss_latex.write(df_clus_oth_latex)
+text_ss_latex = open('Tables/Cluster_centroids5.tex', 'w')
+text_ss_latex.write(df_clus5_latex)
 text_ss_latex.close()

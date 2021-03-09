@@ -40,6 +40,7 @@ df_sec = pd.read_csv('Data\df_sec_note.csv', index_col = 0)
 
 ## Other data
 df_oth = pd.read_csv('Data\df_ri_rc_note.csv')
+df_oth['ta'] = np.exp(df_oth.ln_ta) - 1
 
 # Merge data
 df = df_sec.merge(df_oth, how = 'inner', on = ['date','IDRSSD'])
@@ -74,17 +75,17 @@ df_standard = preprocessing.scale(df[vars_tot])
 
 # Pre-tests
 ## Bartlett's test. H0: equal variance
-bartlett_chi ,bartlett_p = calculate_bartlett_sphericity(df[vars_tot]) # p = 0.0
+bartlett_chi, bartlett_p = calculate_bartlett_sphericity(df[vars_tot]) # p = 0.0
 
 ## Kaiser-Meyer-Olkin (KMO) test. Measures data suitability; should be between 0 and 1, but above 0.6
 kmo_all, kmo_model = calculate_kmo(df[vars_tot]) #kmo_model = 0.7297
 
 #--------------------------------------------
 # Factor Analysis
-fa = FactorAnalyzer(rotation = None, n_factors = 3)
+fa = FactorAnalyzer(rotation = None, n_factors = 4)
 fa.fit(df[vars_tot])
 ev, v = fa.get_eigenvalues()
-'''NOTE: First three factors have an eigen value greater than 1. Use those.'''
+'''NOTE: First four factors have an eigen value greater than 1. Use those.'''
 
 # Perform a parallel analysis
 list_ev_rand = []
@@ -92,7 +93,7 @@ list_ev_rand = []
 np.random.seed(10)
 for i in range(100):
     df_rand = pd.DataFrame(np.random.rand(*df[vars_tot].shape))
-    fa_rand = FactorAnalyzer(rotation = None, n_factors = 3).fit(df_rand)
+    fa_rand = FactorAnalyzer(rotation = None, n_factors = 4).fit(df_rand)
     ev_rand, _ = fa_rand.get_eigenvalues()
     list_ev_rand.append(ev_rand)
 
@@ -107,41 +108,41 @@ fig.savefig('Figures/Dimension_reduction/FA_parallel.png')
 
 # Get the factor loadings
 fa_loadings = pd.DataFrame(fa.loadings_,\
-                           columns = range(3),\
+                           columns = range(4),\
                            index = vars_tot)
 
 fa_loadings.to_csv('Results/fa_loadings_norotation_sec.csv')
 
 #--------------------------------------------
 # First rotation: varimax (maximizes the sum of the variance of squared loadings)
-fa_vm = FactorAnalyzer(rotation = 'varimax', n_factors = 3)
+fa_vm = FactorAnalyzer(rotation = 'varimax', n_factors = 4)
 fa_vm.fit(df[vars_tot])
 
 # Get the factor loadings 
 fa_vm_loadings = pd.DataFrame(fa_vm.loadings_,\
-                           columns = range(3),\
+                           columns = range(4),\
                            index = vars_tot)
 
 fa_vm_loadings.to_csv('Results/fa_loadings_varimax_sec.csv')
 
 # Second rotation: promax (builds upon the varimax rotation, but ultimately allows factors to become correlated.)
-fa_pm = FactorAnalyzer(rotation = 'promax', n_factors = 3)
+fa_pm = FactorAnalyzer(rotation = 'promax', n_factors = 4)
 fa_pm.fit(df[vars_tot])
 
 # Get the factor loadings 
 fa_pm_loadings = pd.DataFrame(fa_pm.loadings_,\
-                           columns = range(3),\
+                           columns = range(4),\
                            index = vars_tot)
 
 fa_pm_loadings.to_csv('Results/fa_loadings_promax_sec.csv')
 
 # Third rotation: quartimax (minimizes the number of factors needed to explain each variable.)
-fa_qm = FactorAnalyzer(rotation = 'quartimax', n_factors = 3)
+fa_qm = FactorAnalyzer(rotation = 'quartimax', n_factors = 4)
 fa_qm.fit(df[vars_tot])
 
 # Get the factor loadings 
 fa_qm_loadings = pd.DataFrame(fa_qm.loadings_,\
-                           columns = range(3),\
+                           columns = range(4),\
                            index = vars_tot)
 
 fa_qm_loadings.to_csv('Results/fa_loadings_quartimax_sec.csv')

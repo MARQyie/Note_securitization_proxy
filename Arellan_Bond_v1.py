@@ -55,11 +55,12 @@ df.set_index(keys = ['date','IDRSSD'], inplace = True)
 y = 'zscore'
 sec_vars = df.columns[df.columns.str.contains('cr|hmda')].tolist() + ['cr_cd_gross','cr_cd_net']
 x_exo = ['ln_ta','nim','cti','liq_ratio','loan_ratio','gap'] +\
-        ['dum_{}'.format(year) for year in range(2014,2019+1)] +\
+        ['dum_{}'.format(year) for year in range(2016,2019+1)] +\
         ['constant']
 x_endo = 'zscore_l1'
-instruments = ['zscore_l2'] +\
-              ['ln_ta_l2','nim_l2','cti_l2','liq_ratio_l2','loan_ratio_l2','gap_l2']
+instruments = ['zscore_l2','zscore_l3','zscore_l4'] #+\
+              #['ln_ta_l2','nim_l2','cti_l2','liq_ratio_l2','loan_ratio_l2','gap_l2'] #+\
+              #['ln_ta_l1','nim_l1','cti_l1','liq_ratio_l1','loan_ratio_l1','gap_l1'] 
 
 # Add gross and net credit derivative variables
 df['cr_cd_gross'] = df[['cr_cd_sold', 'cr_cd_purchased']].sum(axis = 1)
@@ -82,8 +83,15 @@ df_fd = df.groupby(level = 1).diff()
 ## NOTE: these instruments are not differenced but lagged two periods
 df_grouped = df.groupby(level = 1)
 
+for var in sec_vars + x_exo[:6]:
+    df_fd['{}_l1'.format(var)] = df_grouped[var].shift(periods = 1)
+
 for var in [y] + sec_vars + x_exo[:6]:
     df_fd['{}_l2'.format(var)] = df_grouped[var].shift(periods = 2)
+    
+# Lag zscore l3 and l4
+df_fd['zscore_l3'] = df_grouped['zscore'].shift(periods = 3)
+df_fd['zscore_l4'] = df_grouped['zscore'].shift(periods = 4)
 
 # Add time dummies
 time_dummies = pd.get_dummies(df_fd.index.get_level_values(0), prefix = 'dum')
@@ -136,12 +144,12 @@ def results2Excel(results, filename):
     j_test = pd.DataFrame([string.split(':') for string in str(results.j_stat).split('\n')])
     
     # C statistic
-    c_test = pd.DataFrame([string.split(':') for string in str(results.c_stat()).split('\n')])
+    #c_test = pd.DataFrame([string.split(':') for string in str(results.c_stat(variables = [x_endo])).split('\n')])
     
     # Save to excel
     writer = pd.ExcelWriter('Results\GMM_IV\{}.xlsx'.format(filename), engine = 'xlsxwriter')
     
-    for sheet, table in zip(['main','secondary','j_test','c_test'],[main_table, second_table, j_test, c_test]):
+    for sheet, table in zip(['main','secondary','j_test'],[main_table, second_table, j_test]):
         table.to_excel(writer, sheet_name = sheet)
     writer.save()
 
@@ -164,7 +172,7 @@ for sec in sec_vars:
 for sec in sec_vars[:6] + sec_vars[8:-2]:
     # Run model
     model = IVGMM(df_fd[y],\
-                       df_fd[['cr_cd_gross'] + [sec] + x_exo],\
+                       df_fd[[sec] + ['cr_cd_gross'] + x_exo],\
                        df_fd[x_endo],\
                        df_fd[instruments])
     results = model.fit()
@@ -176,7 +184,7 @@ for sec in sec_vars[:6] + sec_vars[8:-2]:
 for sec in sec_vars[:6] + sec_vars[8:-2]:
     # Run model
     model = IVGMM(df_fd[y],\
-                       df_fd[['cr_cd_net'] + [sec] + x_exo],\
+                       df_fd[[sec] + ['cr_cd_net'] + x_exo],\
                        df_fd[x_endo],\
                        df_fd[instruments])
     results = model.fit()
@@ -194,7 +202,7 @@ for sec in sec_vars:
     model = IVGMM(df_fd_sec[y],\
                        df_fd_sec[[sec] + x_exo],\
                        df_fd_sec[x_endo],\
-                       df_fd_sec[instruments])
+                       df_fd_sec[instruments + ['{}_l2'.format(sec)]])
     results = model.fit()
     
     # Save to excel
@@ -204,7 +212,7 @@ for sec in sec_vars:
 for sec in sec_vars[:6] + sec_vars[8:-2]:
     # Run model
     model = IVGMM(df_fd_sec[y],\
-                       df_fd_sec[['cr_cd_gross'] + [sec] + x_exo],\
+                       df_fd_sec[[sec] + ['cr_cd_gross'] + x_exo],\
                        df_fd_sec[x_endo],\
                        df_fd_sec[instruments])
     results = model.fit()
@@ -216,7 +224,7 @@ for sec in sec_vars[:6] + sec_vars[8:-2]:
 for sec in sec_vars[:6] + sec_vars[8:-2]:
     # Run model
     model = IVGMM(df_fd_sec[y],\
-                       df_fd_sec[['cr_cd_net'] + [sec] + x_exo],\
+                       df_fd_sec[[sec] + ['cr_cd_net'] + x_exo],\
                        df_fd_sec[x_endo],\
                        df_fd_sec[instruments])
     results = model.fit()
@@ -224,3 +232,51 @@ for sec in sec_vars[:6] + sec_vars[8:-2]:
     # Save to excel
     results2Excel(results, 'gmmiv_sec_net_{}'.format(sec))
 
+# Test Bootstrap
+#--------------------------------------------
+
+# Function
+def BootstrapIVGMM(B, sec):
+    # Original model
+    model_original = IVGMM(df_fd[y],\
+                       df_fd[[sec] + x_exo],\
+                       df_fd[x_endo],\
+                       df_fd[instruments])
+    results_original = model_original.fit()
+    
+    # Set boostrap prelims
+    params_b = []
+    std_b = []
+    np.random.seed(seed=1)
+    
+    for b in range(B):
+    # Resample 
+        df_fd_b = df_fd.sample(frac = 1, replace = True)
+        
+        # Run model
+        model_b = IVGMM(df_fd_b[y],\
+                           df_fd_b[[sec] + x_exo],\
+                           df_fd_b[x_endo],\
+                           df_fd_b[instruments])
+        results_b = model_b.fit()
+        
+        # Save params and std
+        params_b.append(results_b.params)
+        std_b.append(results_b.std_errors)
+    
+    return results_original, params_b, std_b
+    
+# Bootstrap
+B = 99
+
+if __name__ == '__main__':
+    ori_b, params_b, std_b = zip(*Parallel(n_jobs=num_cores)(delayed(BootstrapIVGMM)(B, var) for var in sec_vars))
+
+'''
+# Calculate variance and t-stats (for first parameter)
+var_mean = np.mean([params_b[i][0] for i in range(B)])
+var_b = (1 / (B - 1)) * np.sum([(params_b[i][0] - var_mean)**2 for i in range(B)])
+t_b = np.sort([(params_b[i][0] - results_original.params[0]) / var_b for i in range(B)])
+alpha = 0.1
+i_b = (B + 1) * (1 - alpha/2) 
+bias_b = var_mean - results_original.params[0] '''

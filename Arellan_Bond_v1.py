@@ -271,6 +271,8 @@ B = 99
 
 if __name__ == '__main__':
     ori_b, params_b, std_b = zip(*Parallel(n_jobs=num_cores)(delayed(BootstrapIVGMM)(B, var) for var in sec_vars))
+    
+sns.boxplot(data = [[params_b[j][i][0] for i in range(B)] for j in range(len(sec_vars))])
 
 '''
 # Calculate variance and t-stats (for first parameter)

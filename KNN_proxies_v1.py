@@ -18,7 +18,8 @@ import seaborn as sns
 sns.set(style = 'whitegrid', font_scale = 1.5)
 
 # Machine learning packages
-from sklearn.cluster import KMeans, AgglomerativeClustering
+from sklearn.cluster import KMeans, AgglomerativeClustering, SpectralClustering
+from sklearn.mixture import GaussianMixture
 from scipy.cluster.hierarchy import dendrogram
 
 # Set WD
@@ -210,6 +211,25 @@ centroids5 = pd.DataFrame(centroids5, columns = vars_tot, index = ['C1','C2','C3
 ## Get number of observations per cluster
 cluster_n3 = np.unique(kmeans3.labels_, return_counts = True)[1]
 cluster_n5 = np.unique(kmeans5.labels_, return_counts = True)[1]
+
+#--------------------------------------------
+# Alternative clustering methods
+#--------------------------------------------
+
+#--------------------------------------------
+# Spectral Clustering
+
+sc3 = SpectralClustering(n_clusters = 3, affinity = 'nearest_neighbors', assign_labels = 'kmeans', random_state = 0).fit(df[vars_tot])
+
+#--------------------------------------------
+# Agglomerative Clustering
+
+ac3 = AgglomerativeClustering(n_clusters = 3, linkage = 'ward').fit(df[vars_tot])
+
+#--------------------------------------------
+# Gaussian Mixture
+
+gm2 = GaussianMixture(n_components = 2, random_state=0, verbose = 1).fit(df[vars_tot])
 
 #--------------------------------------------
 # Latex table method

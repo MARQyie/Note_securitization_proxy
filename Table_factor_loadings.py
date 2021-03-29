@@ -35,26 +35,27 @@ os.chdir(r'D:\RUG\PhD\Materials_papers\01-Note_on_securitization')
 
 # Load data
 df_q = pd.read_csv('Results/fa_loadings_quartimax_sec.csv', index_col = 0)
-df_v = pd.read_csv('Results/fa_loadings_varimax_sec.csv', index_col = 0)
+df_p = pd.read_csv('Results/fa_loadings_promax_sec.csv', index_col = 0)
 
 #--------------------------------------------
 # Make tables nice
 #--------------------------------------------
 
 # Set row labels and column labels
+# TODO: change row order
 row_names = ['Net Servicing Fees','Securitization Income','Loan Sales Income','Credit Derivatives Sold',\
              'Credit Derivatives Purchased',\
              'Assets Sold and Securitized','Asset Sold and Not Securitized',\
              'Credit Exposure Other Parties','Total Asset Securitization Vehicles','Total Assets ABCP Conduits',\
              'Total Assets Other VIEs','HDMA Sold To GSE','HMDA Sold to Private',\
-             'HMDA Securitized','Total Assets']
+             'HMDA Securitized']
 
 col_names = [('Quartimax Rotation','F1'), ('Quartimax Rotation','F2'), ('Quartimax Rotation','F3'),\
-             ('Quartimax Rotation','F4'), ('Varimax Rotation','F1'), ('Varimax Rotation','F2'),\
-             ('Varimax Rotation','F3'), ('Varimax Rotation','F4')]
+             ('Quartimax Rotation','F4'), ('Promax Rotation','F1'), ('Promax Rotation','F2'),\
+             ('Promax Rotation','F3'), ('Promax Rotation','F4')]
 
 # Make new table
-df = pd.concat([df_q,df_v], axis = 1)
+df = pd.concat([df_q,df_p], axis = 1)
 
 ## add index and columns
 df.index = row_names
@@ -125,10 +126,10 @@ def resultsToLatex(results, caption = '', label = '', size_string = '\\scriptsiz
     return latex_table
 
 # Call function
-caption = 'Factor Loadings Quartimax and Varimax Rotations'
+caption = 'Factor Loadings Quartimax and Promax Rotations'
 label = 'tab:factor_loadings'
 size_string = '\\scriptsize \n'
-note = "\\textit{Notes.} Factor loadings of the first three factors. "
+note = "\\textit{Notes.} Factor loadings of the first Four factors. "
 
 ss_latex = resultsToLatex(df_bold, caption, label,\
                                  size_string = size_string, note_string = note,\

@@ -45,7 +45,8 @@ df = pd.read_csv('Data\df_sec_note.csv', index_col = 0)
 vars_tot = df.columns[2:].tolist()
 
 # Subset data to only include securitizers
-df_sec = df[(df[vars_tot] > 0).any(axis = 1)]
+unique_idrssd = df[(df[vars_tot] > 0).any(axis = 1)].IDRSSD.unique()
+df_sec = df[df.IDRSSD.isin(unique_idrssd)]
 
 # standardize data
 df_standard = pd.DataFrame(preprocessing.scale(df_sec[vars_tot]), columns = vars_tot)
@@ -105,13 +106,13 @@ heatmap(corr, corr_pval, 'Corr_standardized_fa.png')
 #--------------------------------------------
 
 # Histograms 
-df_standard.hist(bins = 10,figsize=(50,50)) # Not very informative
+df_sec[vars_tot].hist(bins = 10,figsize=(50,50)) # Not very informative
 
 # QQ plot
 from statsmodels.graphics.gofplots import qqplot
 
 for var in vars_tot:
-    qqplot(df_standard[var], line='s') 
+    qqplot(df_sec[var], line='s') 
 
 '''NOTE: Very right-tail heavy'''
 
@@ -122,9 +123,9 @@ lst_k2test = np.zeros((len(vars_tot),2))
 lst_adtest = np.zeros((len(vars_tot),2))
 
 for i in range(len(vars_tot)):
-    lst_swtest[i] = shapiro(df_standard.iloc[:,i])
-    lst_k2test[i] = normaltest(df_standard.iloc[:,i])
-    anderson_test = anderson(df_standard.iloc[:,i])
+    lst_swtest[i] = shapiro(df_sec.iloc[:,i+2])
+    lst_k2test[i] = normaltest(df_sec.iloc[:,i+2])
+    anderson_test = anderson(df_sec.iloc[:,i]+2)
     lst_adtest[i] = anderson_test.statistic, anderson_test.statistic < anderson_test.critical_values[2] # at alpha = 5
 
 '''NOTE: All reject H0 --> Not normal distributed '''
@@ -253,13 +254,13 @@ fa_om_loadings = pd.DataFrame(fa_om.loadings_,\
 
 fa_om_loadings.to_csv('Results/fa_loadings_oblimax_sec.csv')
 
-'''NOTE Based on promax we find badly behaving indicators: 'cr_ta_abcp', 
-    'cr_ce_sec', 'cr_ta_vie_other'. We do not find poorly defined factors. 
+'''NOTE Based on promax we find badly behaving indicators: 'cr_sec_income', 
+    'cr_ce_sec', 'cr_ta_vie_other','cr_ta_secveh','cr_ta_abcp'. We do not find poorly defined factors. 
     
     Preliminary interpretation:
         1) CDO/ABCP securitization
         2) Asset sales (sec and non-sec)
-        3) General securitizatioin
+        3) General securitization
         4) Loan sales
     '''
 
@@ -268,35 +269,38 @@ fa_om_loadings.to_csv('Results/fa_loadings_oblimax_sec.csv')
 #--------------------------------------------
 
 # Get factor estimates
-fa = FactorAnalyzer(rotation = None, n_factors = 4)
-fa.fit(df_standard[[value for value in vars_tot if value not in ('cr_ta_abcp', 'cr_ce_sec','cr_ta_vie_other')]])
+fa = FactorAnalyzer(rotation = None, n_factors = 3)
+fa.fit(df_standard[[value for value in vars_tot if value not in ('cr_sec_income', 'cr_ce_sec', 'cr_ta_vie_other','cr_ta_secveh','cr_ta_abcp')]])
+
+# Get eigenvalues
+ev, v = fa.get_eigenvalues() # Note: Now only three factors are necessary
 
 # Get the non-rotated factor loadings
 fa_loadings = pd.DataFrame(fa.loadings_,\
-                           columns = range(4),\
-                           index = [value for value in vars_tot if value not in ('cr_ta_abcp', 'cr_ce_sec','cr_ta_vie_other')])
+                           columns = range(3),\
+                           index = [value for value in vars_tot if value not in  ('cr_sec_income', 'cr_ce_sec', 'cr_ta_vie_other','cr_ta_secveh','cr_ta_abcp')])
 
 fa_loadings.to_csv('Results/fa_loadings_norotation_sec_rerun.csv')
 
 # quartimax
-fa_qm = FactorAnalyzer(rotation = 'quartimax', n_factors = 4)
-fa_qm.fit(df_standard[[value for value in vars_tot if value not in ('cr_ta_abcp', 'cr_ce_sec','cr_ta_vie_other')]])
+fa_qm = FactorAnalyzer(rotation = 'quartimax', n_factors = 3)
+fa_qm.fit(df_standard[[value for value in vars_tot if value not in  ('cr_sec_income', 'cr_ce_sec', 'cr_ta_vie_other','cr_ta_secveh','cr_ta_abcp')]])
 
 ## Get the factor loadings 
 fa_qm_loadings = pd.DataFrame(fa_qm.loadings_,\
-                           columns = range(4),\
-                           index = [value for value in vars_tot if value not in ('cr_ta_abcp', 'cr_ce_sec','cr_ta_vie_other')])
+                           columns = range(3),\
+                           index = [value for value in vars_tot if value not in  ('cr_sec_income', 'cr_ce_sec', 'cr_ta_vie_other','cr_ta_secveh','cr_ta_abcp')])
 
 fa_qm_loadings.to_csv('Results/fa_loadings_quartimax_sec_rerun.csv')
 
 # promax
-fa_pm = FactorAnalyzer(rotation = 'promax', n_factors = 4)
-fa_pm.fit(df_standard[[value for value in vars_tot if value not in ('cr_ta_abcp', 'cr_ce_sec','cr_ta_vie_other')]])
+fa_pm = FactorAnalyzer(rotation = 'promax', n_factors = 3)
+fa_pm.fit(df_standard[[value for value in vars_tot if value not in  ('cr_sec_income', 'cr_ce_sec', 'cr_ta_vie_other','cr_ta_secveh','cr_ta_abcp')]])
 
 ## Get the factor loadings 
 fa_pm_loadings = pd.DataFrame(fa_pm.loadings_,\
-                           columns = range(4),\
-                           index = [value for value in vars_tot if value not in ('cr_ta_abcp', 'cr_ce_sec','cr_ta_vie_other')])
+                           columns = range(3),\
+                           index = [value for value in vars_tot if value not in  ('cr_sec_income', 'cr_ce_sec', 'cr_ta_vie_other','cr_ta_secveh','cr_ta_abcp')])
 
 fa_pm_loadings.to_csv('Results/fa_loadings_promax_sec_rerun.csv')
 

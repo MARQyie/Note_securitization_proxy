@@ -29,10 +29,11 @@ sns.set(style = 'whitegrid', font_scale = 2)
 from sklearn import preprocessing
 
 # CFA/SEM package
-from semopy import Model, stats
+from semopy import Model, stats, semplot
 # Set WD
 import os
 os.chdir(r'D:\RUG\PhD\Materials_papers\01-Note_on_securitization')
+os.environ["PATH"] += os.pathsep + 'C:/Program Files/Graphviz/bin'
 
 #--------------------------------------------
 # Load data and merge
@@ -41,16 +42,31 @@ os.chdir(r'D:\RUG\PhD\Materials_papers\01-Note_on_securitization')
 # Load data
 df = pd.read_csv('Data\df_sec_note.csv', index_col = 0, dtype = np.float64)
 
+# Add net credit derivatives
+## Note: CD purchased and sold are highly colinear. For that reason we calculate
+## a net CD variable: CD purchased - CD sold. Positive net CD means that the
+## the bank has purchased more protection than it has sold
+df['cr_cd_net'] = df.cr_cd_purchased - df.cr_cd_sold
+
+# Sort columns
+df = df[df.columns.sort_values()]
+
 # set variable names
 # Variable names
-vars_tot = df.columns[2:].tolist()
+vars_tot = [var for var in df.columns if var not in ['IDRSSD','date','cr_cd_purchased','cr_cd_sold']]
 
 # Subset data to only include securitizers
-unique_idrssd = df[(df[vars_tot] > 0).any(axis = 1)].IDRSSD.unique()
-df_sec = df.loc[df.IDRSSD.isin(unique_idrssd),vars_tot]
+#unique_idrssd = df[(df[vars_tot] > 0).any(axis = 1)].IDRSSD.unique()
+#df_sec = df.loc[df.IDRSSD.isin(unique_idrssd),vars_tot]
+df_sec = df.loc[(df[vars_tot] > 0).any(axis = 1),vars_tot]
 
 # standardize data
 df_standard = pd.DataFrame(preprocessing.scale(df_sec[vars_tot]), columns = vars_tot)
+
+# Use power transformation to force normality on the data
+from sklearn.preprocessing import PowerTransformer
+pt = PowerTransformer(standardize = False)
+df_power = pd.DataFrame(pt.fit_transform(df_sec), columns = vars_tot)
 
 # Check definiteness of the var-cov matrix
 cov = df[vars_tot].cov()
@@ -60,89 +76,193 @@ cov_std = df_standard[vars_tot].cov()
 definite_cov_std = np.all(np.linalg.eigvals(cov_std) > 0) # True
 
 #--------------------------------------------
-# Setup factor analysis function
+# Setup factor analysis class funciton
 #--------------------------------------------
 
-# TODO: implement modification indices and expected parameter change
-
-def CFA(mod, data):
-    # Set model
-    model = Model(mod)
+class ModelEval:
+    '''Helper class to CFA. Calculates the model evaluation statistics
     
-    # Estimate model
-    est = model.fit(data)
-    
-    # Get results
-    res = model.inspect(se_robust = True)
-    
-    # Model evaluation
-    ## Overall goodness of fit
-    ''' NOTE The following should be true for a good fit
+    The following should be true for a good fit
         SB Chi2 pval > 0.05
         SRMR close to or below 0.08
         RMSEA close to or below 0.06
         CFI/TLI close to or greater than 0.95
         '''
-    ### Prelims
-    dof = stats.calc_dof(model)
     
-    baseline_model = stats.get_baseline_model(model)
-    baseline_res = baseline_model.fit(df_standard)
-    dof_base = stats.calc_dof(baseline_model)
+    def Misc(self, model, dataframe):
+        '''Calculates miscellaneous statistics '''    
+        dof = stats.calc_dof(model)
     
-    ### SB scaled chi2 
-    chi_stat = (model.n_samples * model.last_result.fun) / (df_standard[model.vars['observed']].kurtosis().mean())
-    chi_p = 1 - chi2.cdf(chi_stat, dof)
+        baseline_model = stats.get_baseline_model(model)
+        baseline_res = baseline_model.fit(dataframe)
+        dof_base = stats.calc_dof(baseline_model)
+        
+        return dof, dof_base, baseline_model
     
-    chi_stat_base = (baseline_model.n_samples * baseline_model.last_result.fun) / (df_standard[baseline_model.vars['observed']].kurtosis().mean())
+    def Chi2(self, model, dataframe):
+        if self.bool_robust:
+            chi_stat = (model.n_samples * model.last_result.fun) / (dataframe[model.vars['observed']].kurtosis().mean())
+        else:
+            chi_stat = model.n_samples * model.last_result.fun
+        chi_p = 1 - chi2.cdf(chi_stat, self.dof)
+        
+        return chi_stat, chi_p
     
-    ### SRMR
-    #### Calculate residual covariance matrix
-    s = model.mx_cov
-    sigma = model.calc_sigma()[0]
-    resid_cov = s - sigma
+    def SRMR(self):
+        '''Calculate the standardized root mean squared residual '''
+        # Calculate residual covariance matrix
+        s = self.mod_semopy.mx_cov
+        sigma = self.mod_semopy.calc_sigma()[0]
+        resid_cov = s - sigma
+        
+        # Transform residual cov to corr
+        resid_cov_std = np.zeros([len(s),len(s)])
+        for i in range (len(resid_cov)):
+            for j in range(len(resid_cov)):
+                i_std, j_std = np.sqrt(s[i,i]), np.sqrt(s[j,j])
+                
+                resid_cov_std[i,j] = resid_cov[i,j] / (i_std * j_std)
+        
+        #### Calculate SRMR
+        return s, sigma, resid_cov, resid_cov_std, np.sum(np.tril(resid_cov_std)**2) / (len(s) * (len(s) + 1) / 2)
     
-    #### Transform residual cov to corr
-    resid_corr = np.zeros([len(s),len(s)])
-    for i in range (len(resid_cov)):
-        for j in range(len(resid_cov)):
-            i_std, j_std = np.sqrt(s[i,i]), np.sqrt(s[j,j])
-            
-            resid_corr[i,j] = resid_cov[i,j] / (i_std * j_std)
+    def GoodnessOfFit(self, model, dataframe, standardized_stats):
+        ## SB scaled chi2
+        chi_stat, chi_p = self.Chi2(model, dataframe)
+        chi_base_stat, chi_base_p = self.Chi2(model, dataframe)
+        
+        ## SRMR
+        s, sigma, epsilon, epsilon_standard, srmr = self.SRMR()
+        
+        ## RMSEA
+        if standardized_stats:
+            rmsea = stats.calc_rmsea(model, chi_stat, self.dof_std)
+        else:
+            rmsea = stats.calc_rmsea(model, chi_stat, self.dof)
+        
+        ## CFI/TFI
+        if standardized_stats:
+            cfi = stats.calc_cfi(model, self.dof_std, chi_stat,  self.dof_std_base, chi_base_stat)
+            tli = stats.calc_tli(model, self.dof_std, chi_stat, self.dof_std_base, chi_base_stat)
+        else:   
+            cfi = stats.calc_cfi(model, self.dof, chi_stat,  self.dof_base, chi_base_stat)
+            tli = stats.calc_tli(model, self.dof, chi_stat, self.dof_base, chi_base_stat)
+        
+        ## GFI/AGFI
+        if standardized_stats:
+            gfi = stats.calc_gfi(model, chi_stat, chi_base_stat)
+            agfi = stats.calc_agfi(model, self.dof_std, self.dof_std_base, gfi)
+        else:   
+            gfi = stats.calc_gfi(model, chi_stat, chi_base_stat)
+            agfi = stats.calc_agfi(model, self.dof, self.dof_base, gfi)
     
-    #### Calculate SRMR
-    srmr = np.sum(np.tril(resid_corr)**2) / (len(s) * (len(s) + 1) / 2)
+        ## AIC/BIC
+        aic = stats.calc_aic(model)
+        bic = stats.calc_bic(model)
+        
+        return chi_stat, chi_p, chi_base_stat, chi_base_p, srmr, rmsea, cfi, tli, gfi, agfi, aic, bic
     
-    ### RMSEA
-    rmsea = stats.calc_rmsea(model, chi_stat, dof)
+    def IllnessOfFit(self):
+        pass
+    # MI: test.mod_semopy.grad_mlw(test.mod_semopy.param_vals).T @ np.linalg.inv(test.mod_semopy.calc_fim()) @ test.mod_semopy.grad_mlw(test.mod_semopy.param_vals) # non robust
     
-    ### CFI/TFI
-    cfi = stats.calc_cfi(model, chi_stat, dof, dof_base, chi_stat_base)
-    tli = stats.calc_tli(model, chi_stat, dof, dof_base, chi_stat_base)
+    def tableGoodnessOfFit(self, chi_stat, chi_p, chi_base_stat, chi_base_p, srmr, rmsea, cfi, tli, gfi, agfi, aic, bic):
+        return pd.DataFrame([['chi_stat','chi_p','chi_base_stat', 'chi_base_p', 'srmr', 'rmsea','cfi','tli','gfi','agfi','aic','bic'],[chi_stat, chi_p, chi_base_stat, chi_base_p, srmr, rmsea, cfi, tli, gfi, agfi, aic, bic]]).T
     
-    ### GFI/AGFI
-    gfi = stats.calc_gfi(model, chi_stat, chi_stat_base)
-    agfi = stats.calc_agfi(model, dof, dof_base, gfi)
+    def EvalStats(self, model, dataframe, standardized_stats = False):
+        '''Wrapper function to calculate 'the 'statistics'''
+        # prelim
+        if standardized_stats:
+            self.dof_std, self.dof_std_base, self.mod_std_base_semopy = self.Misc(model, dataframe)
+        else:   
+            self.dof, self.dof_base, self.mod_base_semopy = self.Misc(model, dataframe)
+        
+        # calculate goodness of fit statistics
+        chi_stat, chi_p, chi_base_stat, chi_base_p, srmr, rmsea, cfi, tli, gfi, agfi, aic, bic = self.GoodnessOfFit(model, dataframe, standardized_stats)
     
-    ### AIC/BIC
-    aic = stats.calc_aic(model)
-    bic = stats.calc_bic(model)
-    
-    ### Make pandas dataframe from the stats
-    model_eval = pd.DataFrame([['chi_stat','chi_p','chi_stat_base','srmr', 'rmsea','cfi','tli','gfi','agfi','aic','bic'],[chi_stat, chi_p, chi_stat_base, srmr, rmsea, cfi, tli, gfi, agfi, aic, bic]]).T
-    
-    # Localized areas of ill fit
-    # TODO: fix --> returns too many standard errors atm
-    ## Standardized residuals (z-score) of the cov-var matrix
-    se = stats.calc_se(model, robust = True)
-    z = stats.calc_zvals(model, std_errors = se)
-    z_p = stats.calc_pvals(model,z)
-    
-    ### Make df
-    illfit_z = pd.DataFrame([se, z, z_p], index = ['se','z','p_val']).T
-    
-    return model, est, res, model_eval, illfit_z
+        ## Make pandas dataframe from the stats
+        eval_stats = self.tableGoodnessOfFit(chi_stat, chi_p, chi_base_stat, chi_base_p, srmr, rmsea, cfi, tli, gfi, agfi, aic, bic)
+        
+        # Calculate Illness of fit statistics
+        ## NOTE: standardized residuals are calculated in the SRMR function
+        
+        return chi_stat, chi_p, chi_base_stat, chi_base_p, srmr, rmsea, cfi, tli, gfi, agfi, aic, bic, eval_stats
 
+class CFA(ModelEval):
+    '''
+    This class performs a confirmatory factor analysis based on the package
+    semopy, and adds robust overall goodness-of-fit statistics and several
+    localized area of ill fit statistics
+    '''
+    
+    def __init__(self, equation, data, robust = True, standardize = False, mimic_lavaan = False, baseline = False):
+        '''
+        Instantiate the class 
+    
+        Parameters
+        ----------
+        equation : str
+            model equation
+        data : pandas DataFrame
+            n * m matrix, where the columns are the variables
+        robust : boolean
+            If True, robust results (sandwich errors) are used
+        standardize : boolean
+            If True, class also returns standardized results next to the
+            original results
+    
+        Returns
+        ----------
+        None
+        '''
+        self.equation = equation
+        self.data = data
+        self.bool_robust = robust
+        self.bool_standardize = standardize
+        self.mimic_lavaan = mimic_lavaan
+        self.bool_baseline = baseline
+        
+    def standardizeData(self, dataframe):
+        '''Standardizes the data, goes after the estimation of the model
+            on the non-standardized dataset'''
+        columns = self.mod_semopy.names_theta[0]
+        return pd.DataFrame(preprocessing.scale(dataframe[columns]), columns = columns)
+        
+    def semopyFit(self, dataframe):
+        ''''Fits the model with semopy. Helper function. '''
+        
+        # Set model
+        model = Model(self.equation, mimic_lavaan = self.mimic_lavaan, baseline = self.bool_baseline)
+    
+        # Estimate model
+        est = model.fit(dataframe)
+    
+        # Get results
+        res = model.inspect(se_robust = self.bool_robust)
+        
+        return model, est, res
+    
+    def fit(self):
+        ''' Fit model to data '''
+        # Get model results
+        self.mod_semopy, self.est_semopy, self.results = self.semopyFit(self.data)
+        
+        # Get model evaluation stats
+        self.chi_stat, self.chi_p, self.chi_base_stat, self.chi_base_p, self.srmr, self.rmsea, self.cfi, self.tli, self.gfi, self.agfi, self.aic, self.bic, self.eval_stats = self.EvalStats(self.mod_semopy, self.data, False)
+        
+        # Get standardized results
+        if self.bool_standardize:
+            ## Standardize data
+            self.data_std = self.standardizeData(self.data)
+            
+            ## Get standardized results
+            self.mod_std_semopy, self.est_std_semopy, self.results_std = self.semopyFit(self.data_std)
+        
+        # Get standardized evaluation stats
+            self.chi_stat_std, self.chi_p_std, self.chi_base_stat_std, self.chi_base_p_std, self.srmr_std, self.rmsea_std, self.cfi_std, self.tli_std, self.gfi_std, self.agfi_std, self.aic_std, self.bic_std, self.eval_stats_std = self.EvalStats(self.mod_std_semopy, self.data_std, True)
+        
+        return self
+    
 #--------------------------------------------
 # Setup Factor model
 #--------------------------------------------
@@ -169,38 +289,34 @@ def CFA(mod, data):
     '''
 
 model_formula0 = '''LS =~ hmda_gse_amount + hmda_priv_amount + cr_ls_income + cr_as_nonsec
-                    SEC =~ hmda_sec_amount + cr_as_sec + cr_serv_fees + cr_sec_income + cr_ce_sec + cr_ta_secveh + cr_cd_sold + cr_cd_purchased + cr_ta_abcp '''
+                    SEC =~ hmda_sec_amount + cr_as_sec + cr_serv_fees + cr_sec_income + cr_ce_sec + cr_ta_secveh + cr_cd_net + cr_ta_abcp
+                    
+                    LS ~~ SEC''' 
 
-model_formula1 = '''ABS =~ hmda_sec_amount + cr_as_sec + cr_serv_fees + cr_sec_income + cr_ce_sec + cr_ta_secveh 
-                   CDO =~ cr_cd_sold + cr_cd_purchased + cr_serv_fees + cr_sec_income + cr_ce_sec + cr_ta_secveh 
-                   LS =~ hmda_gse_amount + hmda_priv_amount + cr_serv_fees + cr_ls_income + cr_as_nonsec'''
 
-model_formula2 = '''ABS =~ hmda_sec_amount + cr_as_sec
-                   SPV =~ cr_ta_abcp + cr_ta_secveh 
-                   OTH =~ cr_cd_sold + cr_cd_purchased + cr_serv_fees + cr_sec_income + cr_ce_sec
-                   LS =~ hmda_gse_amount + hmda_priv_amount + cr_serv_fees + cr_ls_income + cr_as_nonsec'''
+# model_formula1 = '''ABS =~ hmda_sec_amount + cr_as_sec + cr_serv_fees + cr_sec_income + cr_ce_sec + cr_ta_secveh 
+#                    CDO =~ cr_cd_sold + cr_cd_purchased + cr_serv_fees + cr_sec_income + cr_ce_sec + cr_ta_secveh 
+#                    LS =~ hmda_gse_amount + hmda_priv_amount + cr_serv_fees + cr_ls_income + cr_as_nonsec'''
+
+# model_formula2 = '''ABS =~ hmda_sec_amount + cr_as_sec
+#                    SPV =~ cr_ta_abcp + cr_ta_secveh 
+#                    OTH =~ cr_cd_sold + cr_cd_purchased + cr_serv_fees + cr_sec_income + cr_ce_sec
+#                    LS =~ hmda_gse_amount + hmda_priv_amount + cr_serv_fees + cr_ls_income + cr_as_nonsec'''
                    
-model_formula3 = '''ABS =~ hmda_sec_amount + cr_as_sec + cr_serv_fees + cr_sec_income + cr_ce_sec + cr_ta_secveh 
-                   CDO =~ cr_cd_sold + cr_cd_purchased + cr_serv_fees + cr_sec_income + cr_ce_sec + cr_ta_secveh 
-                   ABCP =~ cr_ta_abcp + cr_serv_fees + cr_sec_income + cr_ce_sec
-                   LS =~ hmda_gse_amount + hmda_priv_amount + cr_serv_fees + cr_ls_income + cr_as_nonsec'''
+# model_formula3 = '''ABS =~ hmda_sec_amount + cr_as_sec + cr_serv_fees + cr_sec_income + cr_ce_sec + cr_ta_secveh 
+#                    CDO =~ cr_cd_sold + cr_cd_purchased + cr_serv_fees + cr_sec_income + cr_ce_sec + cr_ta_secveh 
+#                    ABCP =~ cr_ta_abcp + cr_serv_fees + cr_sec_income + cr_ce_sec
+#                    LS =~ hmda_gse_amount + hmda_priv_amount + cr_serv_fees + cr_ls_income + cr_as_nonsec'''
                    
-model_formula4 = '''ABS =~ hmda_sec_amount + cr_as_sec + cr_serv_fees + cr_sec_income + cr_ce_sec + cr_ta_secveh 
-                   CDO =~ cr_cd_sold + cr_cd_purchased + cr_serv_fees + cr_sec_income + cr_ce_sec + cr_ta_secveh 
-                   LS =~ hmda_gse_amount + hmda_priv_amount + cr_serv_fees + cr_ls_income + cr_as_nonsec
+# model_formula4 = '''ABS =~ hmda_sec_amount + cr_as_sec + cr_serv_fees + cr_sec_income + cr_ce_sec + cr_ta_secveh 
+#                    CDO =~ cr_cd_sold + cr_cd_purchased + cr_serv_fees + cr_sec_income + cr_ce_sec + cr_ta_secveh 
+#                    LS =~ hmda_gse_amount + hmda_priv_amount + cr_serv_fees + cr_ls_income + cr_as_nonsec
                    
-                   GEN =~ ABS + CDO'''
+#                    GEN =~ ABS + CDO'''
                   
 #--------------------------------------------
 # Run CFA models
 #--------------------------------------------
+res = CFA(model_formula0, df, standardize = True).fit()
 
-# Make list of model formulas
-models = [model_formula0, model_formula1, model_formula2,model_formula3]
-
-# Setup list to add results to
-res_lst = []
-
-# Loop over 
-for mod in models:
-    res_lst.append(CFA(mod, df_standard))
+g = semplot(res.mod_semopy, r"D:\RUG\PhD\Materials_papers\01-Note_on_securitization\Figures\CFA_path_diagrams\test.PNG")

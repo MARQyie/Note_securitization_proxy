@@ -45,8 +45,7 @@ df = pd.read_csv('Data\df_sec_note.csv', index_col = 0)
 vars_tot = df.columns[2:].tolist()
 
 # Subset data to only include securitizers
-unique_idrssd = df[(df[vars_tot] > 0).any(axis = 1)].IDRSSD.unique()
-df_sec = df[df.IDRSSD.isin(unique_idrssd)]
+df_sec = df.loc[(df[vars_tot] > 0).any(axis = 1),:]
 
 # standardize data
 df_standard = pd.DataFrame(preprocessing.scale(df_sec[vars_tot]), columns = vars_tot)

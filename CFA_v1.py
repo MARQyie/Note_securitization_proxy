@@ -290,7 +290,6 @@ class CFA(ModelEval):
 
 model_formula0 = '''LS =~ hmda_gse_amount + hmda_priv_amount + cr_ls_income + cr_as_nonsec
                     SEC =~ hmda_sec_amount + cr_as_sec + cr_serv_fees + cr_sec_income + cr_ce_sec + cr_ta_secveh + cr_cd_net + cr_ta_abcp
-                    
                     LS ~~ SEC''' 
 
 
@@ -320,3 +319,5 @@ model_formula0 = '''LS =~ hmda_gse_amount + hmda_priv_amount + cr_ls_income + cr
 res = CFA(model_formula0, df, standardize = True).fit()
 
 g = semplot(res.mod_semopy, r"D:\RUG\PhD\Materials_papers\01-Note_on_securitization\Figures\CFA_path_diagrams\test.PNG")
+
+                  

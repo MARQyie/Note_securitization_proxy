@@ -40,9 +40,11 @@ os.chdir(r'D:\RUG\PhD\Materials_papers\01-Note_on_securitization')
 # Load data
 df = pd.read_csv('Data\df_sec_note.csv', index_col = 0)
 
+# Make net cd variable
+df['cr_cd_net'] = df.cr_cd_purchased - df.cr_cd_sold
+
 # set variable names
-# Variable names
-vars_tot = df.columns[2:].tolist()
+vars_tot = [var for var in df.columns if var not in ['IDRSSD','date','cr_cd_purchased','cr_cd_sold']]
 
 # Subset data to only include securitizers
 df_sec = df.loc[(df[vars_tot] > 0).any(axis = 1),:]
@@ -88,8 +90,7 @@ corr = df_standard[vars_tot].corr(method = 'spearman')
 corr_pval = spearmanr(df_standard[vars_tot])[1] 
 
 # Label columns and index
-labels = ['Serv. Fees','Sec. Income','LS Income','CD Sold',\
-             'CD Purchased',\
+labels = ['Serv. Fees','Sec. Income','LS Income','CD Net',\
              'Assets Sold and Sec.','Asset Sold and Not Sec.',\
              'Cred. Exp. Oth.','TA Sec. Veh.','TA ABCP','TA Oth. VIEs',\
              'HDMA GSE','HMDA Private','HMDA Sec.']
@@ -147,7 +148,7 @@ for i in range(len(vars_tot)):
 bartlett_chi, bartlett_p = calculate_bartlett_sphericity(df_standard[vars_tot]) # p = 0.0
 
 # Kaiser-Meyer-Olkin (KMO) test. Measures data suitability; should be between 0 and 1, but above 0.5
-kmo_all, kmo_model = calculate_kmo(df_standard[vars_tot]) #kmo_model = 0.72
+kmo_all, kmo_model = calculate_kmo(df_standard[vars_tot]) #kmo_model = 0.69
 
 '''Note: looks good '''
 
@@ -162,7 +163,7 @@ kmo_all, kmo_model = calculate_kmo(df_standard[vars_tot]) #kmo_model = 0.72
     '''
     
 # Get factor estimates
-fa = FactorAnalyzer(rotation = None)
+fa = FactorAnalyzer(rotation = None, method = 'principal')
 fa.fit(df_standard[vars_tot])
 ev, v = fa.get_eigenvalues()
 
@@ -177,7 +178,7 @@ for i in range(100):
     list_ev_rand.append(ev_rand)
 
 fig, ax = plt.subplots(figsize=(15,9)) 
-ax.set(ylabel='Eigen Value', xlabel = 'Factor')
+ax.set(ylabel='Eigenvalue', xlabel = 'Factor')
 ax.plot(range(1, df_standard.shape[1] + 1), ev, marker = 'o', label = 'Factor')
 ax.plot(range(1, df_standard.shape[1] + 1), np.mean(list_ev_rand,axis = 0), color = 'black', linestyle = '--', label = 'Parallel Analysis')
 ax.legend()
@@ -193,12 +194,12 @@ fig.savefig('Figures/Dimension_reduction/FA_parallel.png')
 #--------------------------------------------
     
 # Get factor estimates
-fa = FactorAnalyzer(rotation = None, n_factors = 4)
+fa = FactorAnalyzer(rotation = None, n_factors = 3, method = 'principal')
 fa.fit(df_standard[vars_tot])
 
 # Get the non-rotated factor loadings
 fa_loadings = pd.DataFrame(fa.loadings_,\
-                           columns = range(4),\
+                           columns = range(3),\
                            index = vars_tot)
 
 fa_loadings.to_csv('Results/fa_loadings_norotation_sec.csv')
@@ -207,23 +208,23 @@ fa_loadings.to_csv('Results/fa_loadings_norotation_sec.csv')
 # Orthogonal rotations
 
 # Varimax (maximizes the sum of the variance of squared loadings)
-fa_vm = FactorAnalyzer(rotation = 'varimax', n_factors = 4)
+fa_vm = FactorAnalyzer(rotation = 'varimax', n_factors = 3, method = 'principal')
 fa_vm.fit(df_standard[vars_tot])
 
 ## Get the factor loadings 
 fa_vm_loadings = pd.DataFrame(fa_vm.loadings_,\
-                           columns = range(4),\
+                           columns = range(3),\
                            index = vars_tot)
 
 fa_vm_loadings.to_csv('Results/fa_loadings_varimax_sec.csv')
 
 # Quartimax (minimizes the number of factors needed to explain each variable.)
-fa_qm = FactorAnalyzer(rotation = 'quartimax', n_factors = 4)
+fa_qm = FactorAnalyzer(rotation = 'quartimax', n_factors = 3, method = 'principal')
 fa_qm.fit(df_standard[vars_tot])
 
 ## Get the factor loadings 
 fa_qm_loadings = pd.DataFrame(fa_qm.loadings_,\
-                           columns = range(4),\
+                           columns = range(3),\
                            index = vars_tot)
 
 fa_qm_loadings.to_csv('Results/fa_loadings_quartimax_sec.csv')
@@ -232,35 +233,47 @@ fa_qm_loadings.to_csv('Results/fa_loadings_quartimax_sec.csv')
 # Oblique rotations
 
 # Promax 
-fa_pm = FactorAnalyzer(rotation = 'promax', n_factors = 4)
+fa_pm = FactorAnalyzer(rotation = 'promax', n_factors = 3, method = 'principal')
 fa_pm.fit(df_standard[vars_tot])
 
 ## Get the factor loadings 
 fa_pm_loadings = pd.DataFrame(fa_pm.loadings_,\
-                           columns = range(4),\
+                           columns = range(3),\
                            index = vars_tot)
 
 fa_pm_loadings.to_csv('Results/fa_loadings_promax_sec.csv')
 
 # Oblimax
-fa_om = FactorAnalyzer(rotation = 'oblimax', n_factors = 4)
+fa_om = FactorAnalyzer(rotation = 'oblimin', n_factors = 3, method = 'principal')
 fa_om.fit(df_standard[vars_tot])
 
 ## Get the factor loadings 
 fa_om_loadings = pd.DataFrame(fa_om.loadings_,\
-                           columns = range(4),\
+                           columns = range(3),\
                            index = vars_tot)
 
-fa_om_loadings.to_csv('Results/fa_loadings_oblimax_sec.csv')
+fa_om_loadings.to_csv('Results/fa_loadings_oblimin_sec.csv')
+
+# Oblimax
+fa_qmo = FactorAnalyzer(rotation = 'quartimin', n_factors = 3, method = 'principal')
+fa_qmo.fit(df_standard[vars_tot])
+
+## Get the factor loadings 
+fa_qmo_loadings = pd.DataFrame(fa_qmo.loadings_,\
+                           columns = range(3),\
+                           index = vars_tot)
+
+fa_qmo_loadings.to_csv('Results/fa_loadings_quartimin_sec.csv')
+
+ 
 
 '''NOTE Based on promax we find badly behaving indicators: 'cr_sec_income', 
     'cr_ce_sec', 'cr_ta_vie_other','cr_ta_secveh','cr_ta_abcp'. We do not find poorly defined factors. 
     
     Preliminary interpretation:
-        1) CDO/ABCP securitization
-        2) Asset sales (sec and non-sec)
+        1) Asset sales (sec and non-sec)
+        2) ABCP securitization
         3) General securitization
-        4) Loan sales
     '''
 
 #--------------------------------------------

@@ -398,11 +398,20 @@ df['cr_sec_pending'] = df_raw.RCF654
 # Net gains loan sales
 df['cr_ls_income'] = df_raw.RIAD5416
 
-# Sold protection credit derivatives
+# Sold protection credit derivatives plus sub-categories
 df['cr_cd_sold'] = df_raw.loc[:,['RCC968','RCC970','RCC972','RCC974']].sum(axis = 1)
+df['cr_cds_sold'] = df_raw.RCC968 # Usual CDO structure
+df['cr_trs_sold'] = df_raw.RCC970 # Other possible option, see Lancaster et al (2008): Structured Products and Related Credit Derivatives: A Comprehensive Guide for Investors 
+df['cr_co_sold'] = df_raw.RCC972
+df['cr_cdoth_sold'] = df_raw.RCC974
 
-# Purchased protection credit derivatives
+# Purchased protection credit derivativesplus sub-categories
+# NOTE If the bank does CDO securitization, it is most likely to purchase CDSs and TRSs. Other forms do exist
 df['cr_cd_purchased'] = df_raw.loc[:,['RCC969','RCC971','RCC973','RCC975']].sum(axis = 1)
+df['cr_cds_purchased'] = df_raw.RCC969
+df['cr_trs_purchased'] = df_raw.RCC971
+df['cr_co_purchased'] = df_raw.RCC973
+df['cr_cdoth_purchased'] = df_raw.RCC975
 
 '''OLD
 # On-balance sheet securitization exposures
@@ -411,7 +420,7 @@ df['cr_se_on'] = df_raw.loc[:,['RCFDS475','RCFDS480','RCFDS485','RCFDS490']].sum
 # Off-balance sheet securitization exposures 
 df['cr_se_off'] = df_raw.RCFDS495
 '''
-# Assets sold and securitized with recourse
+# Assets sold and securitized with recourse 
 df['cr_as_sec'] = df_raw.loc[:,['RCB{}'.format(i) for i in range(705,711+1)] +\
   ['RCONFT08']].sum(axis = 1)
 
@@ -445,7 +454,7 @@ df['cr_ta_vie_other'] = df_raw.loc[:,vars_vie_other].sum(axis = 1)
 # Fill NA
 df.fillna(0, inplace = True)
 
-# Remove negative values in cr_sec_income and cr_ta_secveh
+# Remove negative values in cr_ta_secveh
 df = df[df.cr_ta_secveh >= 0]
 
 #--------------------------------------------

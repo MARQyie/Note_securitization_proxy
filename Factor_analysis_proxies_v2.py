@@ -41,10 +41,10 @@ os.chdir(r'D:\RUG\PhD\Materials_papers\01-Note_on_securitization')
 df = pd.read_csv('Data\df_sec_note.csv', index_col = 0)
 
 # Make net cd variable
-df['cr_cd_net'] = df.cr_cd_purchased - df.cr_cd_sold
+#df['cr_cd_net'] = df.cr_cd_purchased - df.cr_cd_sold
 
 # set variable names
-vars_tot = [var for var in df.columns if var not in ['IDRSSD','date','cr_cd_purchased','cr_cd_sold']]
+vars_tot = [var for var in df.columns if var not in ['IDRSSD','date','cr_cd_purchased','cr_cd_sold', 'cr_cds_sold', 'cr_trs_sold', 'cr_co_sold', 'cr_cdoth_sold']]
 
 # Subset data to only include securitizers
 df_sec = df.loc[(df[vars_tot] > 0).any(axis = 1),:]
@@ -90,7 +90,8 @@ corr = df_standard[vars_tot].corr(method = 'spearman')
 corr_pval = spearmanr(df_standard[vars_tot])[1] 
 
 # Label columns and index
-labels = ['Serv. Fees','Sec. Income','LS Income','CD Net',\
+labels = ['Serv. Fees','Sec. Income','LS Income','CDS Pur.',\
+          'TRS Pur.','CO Pur.','CD Oth Pur.',\
              'Assets Sold and Sec.','Asset Sold and Not Sec.',\
              'Cred. Exp. Oth.','TA Sec. Veh.','TA ABCP','TA Oth. VIEs',\
              'HDMA GSE','HMDA Private','HMDA Sec.']
@@ -148,7 +149,7 @@ for i in range(len(vars_tot)):
 bartlett_chi, bartlett_p = calculate_bartlett_sphericity(df_standard[vars_tot]) # p = 0.0
 
 # Kaiser-Meyer-Olkin (KMO) test. Measures data suitability; should be between 0 and 1, but above 0.5
-kmo_all, kmo_model = calculate_kmo(df_standard[vars_tot]) #kmo_model = 0.69
+kmo_all, kmo_model = calculate_kmo(df_standard[vars_tot]) #kmo_model = 0.76
 
 '''Note: looks good '''
 
@@ -194,12 +195,12 @@ fig.savefig('Figures/Dimension_reduction/FA_parallel.png')
 #--------------------------------------------
     
 # Get factor estimates
-fa = FactorAnalyzer(rotation = None, n_factors = 3, method = 'principal')
+fa = FactorAnalyzer(rotation = None, n_factors = 4, method = 'principal')
 fa.fit(df_standard[vars_tot])
 
 # Get the non-rotated factor loadings
 fa_loadings = pd.DataFrame(fa.loadings_,\
-                           columns = range(3),\
+                           columns = range(4),\
                            index = vars_tot)
 
 fa_loadings.to_csv('Results/fa_loadings_norotation_sec.csv')
@@ -208,23 +209,23 @@ fa_loadings.to_csv('Results/fa_loadings_norotation_sec.csv')
 # Orthogonal rotations
 
 # Varimax (maximizes the sum of the variance of squared loadings)
-fa_vm = FactorAnalyzer(rotation = 'varimax', n_factors = 3, method = 'principal')
+fa_vm = FactorAnalyzer(rotation = 'varimax', n_factors = 4, method = 'principal')
 fa_vm.fit(df_standard[vars_tot])
 
 ## Get the factor loadings 
 fa_vm_loadings = pd.DataFrame(fa_vm.loadings_,\
-                           columns = range(3),\
+                           columns = range(4),\
                            index = vars_tot)
 
 fa_vm_loadings.to_csv('Results/fa_loadings_varimax_sec.csv')
 
 # Quartimax (minimizes the number of factors needed to explain each variable.)
-fa_qm = FactorAnalyzer(rotation = 'quartimax', n_factors = 3, method = 'principal')
+fa_qm = FactorAnalyzer(rotation = 'quartimax', n_factors = 4, method = 'principal')
 fa_qm.fit(df_standard[vars_tot])
 
 ## Get the factor loadings 
 fa_qm_loadings = pd.DataFrame(fa_qm.loadings_,\
-                           columns = range(3),\
+                           columns = range(4),\
                            index = vars_tot)
 
 fa_qm_loadings.to_csv('Results/fa_loadings_quartimax_sec.csv')
@@ -233,89 +234,50 @@ fa_qm_loadings.to_csv('Results/fa_loadings_quartimax_sec.csv')
 # Oblique rotations
 
 # Promax 
-fa_pm = FactorAnalyzer(rotation = 'promax', n_factors = 3, method = 'principal')
+fa_pm = FactorAnalyzer(rotation = 'promax', n_factors = 4, method = 'principal')
 fa_pm.fit(df_standard[vars_tot])
 
 ## Get the factor loadings 
 fa_pm_loadings = pd.DataFrame(fa_pm.loadings_,\
-                           columns = range(3),\
+                           columns = range(4),\
                            index = vars_tot)
 
 fa_pm_loadings.to_csv('Results/fa_loadings_promax_sec.csv')
 
-# Oblimax
-fa_om = FactorAnalyzer(rotation = 'oblimin', n_factors = 3, method = 'principal')
+# Oblimin
+fa_om = FactorAnalyzer(rotation = 'oblimin', n_factors = 4, method = 'principal')
 fa_om.fit(df_standard[vars_tot])
 
 ## Get the factor loadings 
 fa_om_loadings = pd.DataFrame(fa_om.loadings_,\
-                           columns = range(3),\
+                           columns = range(4),\
                            index = vars_tot)
 
 fa_om_loadings.to_csv('Results/fa_loadings_oblimin_sec.csv')
 
-# Oblimax
-fa_qmo = FactorAnalyzer(rotation = 'quartimin', n_factors = 3, method = 'principal')
+# Quartimin
+fa_qmo = FactorAnalyzer(rotation = 'quartimin', n_factors = 4, method = 'principal')
 fa_qmo.fit(df_standard[vars_tot])
 
 ## Get the factor loadings 
 fa_qmo_loadings = pd.DataFrame(fa_qmo.loadings_,\
-                           columns = range(3),\
+                           columns = range(4),\
                            index = vars_tot)
 
 fa_qmo_loadings.to_csv('Results/fa_loadings_quartimin_sec.csv')
 
  
 
-'''NOTE Based on promax we find badly behaving indicators: 'cr_sec_income', 
-    'cr_ce_sec', 'cr_ta_vie_other','cr_ta_secveh','cr_ta_abcp'. We do not find poorly defined factors. 
+'''NOTE Based on promax we find no badly behaving indicators (only low loadings). 
+    Two variables have high loadings on two factors: cr_ls_income, cr_ce_sec.
+    No poorly defined factors
     
     Preliminary interpretation:
-        1) Asset sales (sec and non-sec)
-        2) ABCP securitization
-        3) General securitization
+        1) Loan sales/ABC securitization
+        2) Other (?))
+        3) CDO/ABCP Securitization
+        4) Securitization income
     '''
-
-#--------------------------------------------
-# Rerun fa
-#--------------------------------------------
-
-# Get factor estimates
-fa = FactorAnalyzer(rotation = None, n_factors = 3)
-fa.fit(df_standard[[value for value in vars_tot if value not in ('cr_sec_income', 'cr_ce_sec', 'cr_ta_vie_other','cr_ta_secveh','cr_ta_abcp')]])
-
-# Get eigenvalues
-ev, v = fa.get_eigenvalues() # Note: Now only three factors are necessary
-
-# Get the non-rotated factor loadings
-fa_loadings = pd.DataFrame(fa.loadings_,\
-                           columns = range(3),\
-                           index = [value for value in vars_tot if value not in  ('cr_sec_income', 'cr_ce_sec', 'cr_ta_vie_other','cr_ta_secveh','cr_ta_abcp')])
-
-fa_loadings.to_csv('Results/fa_loadings_norotation_sec_rerun.csv')
-
-# quartimax
-fa_qm = FactorAnalyzer(rotation = 'quartimax', n_factors = 3)
-fa_qm.fit(df_standard[[value for value in vars_tot if value not in  ('cr_sec_income', 'cr_ce_sec', 'cr_ta_vie_other','cr_ta_secveh','cr_ta_abcp')]])
-
-## Get the factor loadings 
-fa_qm_loadings = pd.DataFrame(fa_qm.loadings_,\
-                           columns = range(3),\
-                           index = [value for value in vars_tot if value not in  ('cr_sec_income', 'cr_ce_sec', 'cr_ta_vie_other','cr_ta_secveh','cr_ta_abcp')])
-
-fa_qm_loadings.to_csv('Results/fa_loadings_quartimax_sec_rerun.csv')
-
-# promax
-fa_pm = FactorAnalyzer(rotation = 'promax', n_factors = 3)
-fa_pm.fit(df_standard[[value for value in vars_tot if value not in  ('cr_sec_income', 'cr_ce_sec', 'cr_ta_vie_other','cr_ta_secveh','cr_ta_abcp')]])
-
-## Get the factor loadings 
-fa_pm_loadings = pd.DataFrame(fa_pm.loadings_,\
-                           columns = range(3),\
-                           index = [value for value in vars_tot if value not in  ('cr_sec_income', 'cr_ce_sec', 'cr_ta_vie_other','cr_ta_secveh','cr_ta_abcp')])
-
-fa_pm_loadings.to_csv('Results/fa_loadings_promax_sec_rerun.csv')
-
 
 #--------------------------------------------
 # Save loadings to excel

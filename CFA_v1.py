@@ -29,7 +29,11 @@ sns.set(style = 'whitegrid', font_scale = 2)
 from sklearn import preprocessing
 
 # CFA/SEM package
-from semopy import Model, stats, semplot, efa
+from semopy import Model, stats, semplot
+
+# Zip file manipulation
+from zipfile import ZipFile
+
 # Set WD
 import os
 os.chdir(r'D:\RUG\PhD\Materials_papers\01-Note_on_securitization')
@@ -56,16 +60,21 @@ df = df[df.columns.sort_values()]
 vars_tot = [var for var in df.columns if var not in ['IDRSSD','date','cr_cd_purchased','cr_cd_sold', 'cr_cds_sold', 'cr_trs_sold', 'cr_co_sold', 'cr_cdoth_sold']]
 
 # Subset data to only include securitizers
+# TODO REMOVE
 #unique_idrssd = df[(df[vars_tot] > 0).any(axis = 1)].IDRSSD.unique()
 #df_sec = df.loc[df.IDRSSD.isin(unique_idrssd),vars_tot]
-df_sec = df.loc[(df[vars_tot] > 0).any(axis = 1),vars_tot]
+df_sec = df.loc[(df[vars_tot] != 0).any(axis = 1),vars_tot]
+
+# Take logs of the data
+df_log = np.log(df_sec - df_sec.min() + 1) 
+# Todo: think of something for the income variables
 
 # standardize data
-df_standard = pd.DataFrame(preprocessing.scale(df_sec[vars_tot]), columns = vars_tot)
-df_normal = pd.DataFrame(preprocessing.normalize(df_sec[vars_tot]), columns = vars_tot)
+#df_standard = pd.DataFrame(preprocessing.scale(df_sec[vars_tot]), columns = vars_tot)
+#df_normal = pd.DataFrame(preprocessing.normalize(df_sec[vars_tot]), columns = vars_tot)
 
 # binary data
-df_binary = (df_sec != 0) * 1
+#df_binary = (df_sec != 0) * 1
 
 # Use power transformation to force normality on the data
 #from sklearn.preprocessing import PowerTransformer
@@ -73,33 +82,14 @@ df_binary = (df_sec != 0) * 1
 #df_power = pd.DataFrame(pt.fit_transform(df_sec), columns = vars_tot)
 
 # Check definiteness of the var-cov matrix
-cov = df[vars_tot].cov()
+cov = df_sec[vars_tot].cov()
 definite_cov = np.all(np.linalg.eigvals(cov) > 0) # True
 
-cov_std = df_standard[vars_tot].cov()
-definite_cov_std = np.all(np.linalg.eigvals(cov_std) > 0) # True
+cov_log = df_log[vars_tot].cov()
+definite_cov_log = np.all(np.linalg.eigvals(cov_log) > 0) # True
 
-#--------------------------------------------
-# Run EFA procedure from semopy
-# NOTE: no paper has been published yet on the procedure
-# USE WITH CAUTION
-#--------------------------------------------
-
-# Simple, single layer CFA
-exp_single = efa.explore_cfa_model(df_standard) # Warning: using PD.Moore-Penrose inversion
-''' eta1 =~ hmda_gse_amount + cr_as_sec + cr_ls_income + cr_serv_fees + hmda_priv_amount + cr_cdoth_purchased + cr_sec_income + cr_ta_secveh + cr_as_nonsec + hmda_sec_amount + cr_ce_sec + cr_trs_purchased + cr_cds_purchased + cr_co_purchased + cr_ta_abcp
-eta2 =~ cr_ta_abcp + cr_trs_purchased + cr_cds_purchased + cr_co_purchased + cr_ce_sec + cr_ta_vie_other + cr_as_sec + cr_ta_secveh + hmda_gse_amount + hmda_sec_amount
-
-'''
-
-# Multi layer CFA
-exp_multi = efa.explore_pine_model(df_standard) # Warning: using PD.Moore-Penrose inversion
-''' eta1 =~ hmda_gse_amount + cr_as_sec + cr_ls_income + cr_serv_fees + hmda_priv_amount + cr_cdoth_purchased + cr_sec_income + cr_ta_secveh + cr_as_nonsec + hmda_sec_amount + cr_ce_sec + cr_trs_purchased + cr_cds_purchased + cr_co_purchased + cr_ta_abcp
-eta2 =~ cr_ta_abcp + cr_trs_purchased + cr_cds_purchased + cr_co_purchased + cr_ce_sec + cr_ta_vie_other + cr_as_sec + cr_ta_secveh + hmda_gse_amount + hmda_sec_amount
-'''
-
-# Find latent variables
-latent_find = efa.find_latents(df_standard)
+#cov_std = df_standard[vars_tot].cov()
+#definite_cov_std = np.all(np.linalg.eigvals(cov_std) > 0) # True
 
 #--------------------------------------------
 # Setup factor analysis class funciton
@@ -151,8 +141,10 @@ class ModelEval:
                 
                 resid_cov_std[i,j] = resid_cov[i,j] / (i_std * j_std)
         
-        #### Calculate SRMR
-        return s, sigma, resid_cov, resid_cov_std, np.sum(np.tril(resid_cov_std)**2) / (len(s) * (len(s) + 1) / 2)
+        # Calculate SRMR
+        srmr = np.sum(np.tril(resid_cov_std)**2) / (len(s) * (len(s) + 1) / 2)
+        
+        return s, sigma, resid_cov, resid_cov_std, srmr
     
     def GoodnessOfFit(self, model, base_model, dataframe, standardized_stats):
         ## chi2
@@ -300,11 +292,12 @@ class CFA(ModelEval):
             self.chi_stat_std, self.chi_p_std, self.chi_base_stat_std, self.chi_base_p_std, self.srmr_std, self.rmsea_std, self.cfi_std, self.tli_std, self.gfi_std, self.agfi_std, self.aic_std, self.bic_std, self.eval_stats_std = self.EvalStats(self.mod_std_semopy, self.data_std, True)
         
         return self
-    
+
 #--------------------------------------------
 # Setup Factor model
 #--------------------------------------------
 
+#TODO: Determine which variables to declare 'censored'
 # Model specification
 '''NOTE: We test various model specifications in this script. All are based 
     on theory/previous exploratory factor analyses. Main give aways:
@@ -319,68 +312,49 @@ class CFA(ModelEval):
             high loadings or no high loadings). The severity is only low.
     '''
 
-# Model from EFA (as test)
-#formula_efa = '''eta1 =~ hmda_gse_amount + cr_ls_income + cr_as_sec + cr_as_nonsec + cr_ce_sec
-#                 eta2 =~ hmda_priv_amount + cr_ta_secveh + cr_ta_abcp + cr_ta_vie_other + cr_cd_net
-#                 eta3 =~ hmda_sec_amount + cr_serv_fees + cr_sec_income
-#'''
-
 # Main Model
-formula0 = '''LS =~ cr_as_nonsec + hmda_gse_amount + hmda_priv_amount + cr_ls_income + cr_serv_fees
-              SEC1 =~ cr_as_sec + hmda_sec_amount + cr_ce_sec + cr_serv_fees + cr_ta_secveh + cr_sec_income
-              SEC2 =~ cr_cds_purchased + cr_trs_purchased + cr_co_purchased + cr_cdoth_purchased + cr_ta_secveh + cr_ta_abcp + cr_sec_income
-              GENSEC =~ SEC1 + SEC2
+formula0 = '''LS =~ cr_as_nonsec + 1*hmda_gse_amount + hmda_priv_amount + cr_ls_income + cr_serv_fees
+              ABS =~ cr_as_sec + 1*hmda_sec_amount + cr_ce_sec + cr_serv_fees + cr_ta_secveh + cr_sec_income
+              CDO =~ cr_cds_purchased + cr_trs_purchased + cr_co_purchased + cr_cdoth_purchased + cr_ta_secveh + cr_sec_income
+              ABCP =~ cr_ta_abcp + cr_sec_income 
+              GENSEC =~ ABS + CDO + ABCP 
               
-              DEFINE(latent) LS SEC1 SEC2 GENSEC
+              DEFINE(latent) LS ABS CDO ABCP GENSEC
               
-              LS ~~ GENSEC
-              ''' 
-
-formula0_ord = '''LS =~ cr_as_nonsec + hmda_gse_amount + hmda_priv_amount + cr_ls_income + cr_serv_fees
-              SEC1 =~ cr_as_sec + hmda_sec_amount + cr_ce_sec + cr_serv_fees + cr_ta_secveh + cr_sec_income
-              SEC2 =~ cr_cds_purchased + cr_trs_purchased + cr_co_purchased + cr_cdoth_purchased + cr_ta_secveh + cr_ta_abcp + cr_sec_income
-              GENSEC =~ SEC1 + SEC2
-              
-              DEFINE(latent) LS SEC1 SEC2 GENSEC
-              DEFINE(ordinal) cr_as_nonsec hmda_gse_amount hmda_priv_amount cr_as_sec hmda_sec_amount cr_ce_sec cr_ta_secveh cr_cds_purchased cr_trs_purchased cr_co_purchased cr_cdoth_purchased cr_ta_abcp
-              
-              LS ~~ GENSEC
+              LS ~~ ABS
               ''' 
 
 # Alternative Models
-## No multilevel
-formula1 = '''# Measurement model
-              LS =~ cr_as_nonsec + hmda_gse_amount + hmda_priv_amount + cr_ls_income + cr_serv_fees
-              ABS =~ cr_as_sec + hmda_sec_amount + cr_ce_sec + cr_serv_fees + cr_ta_secveh + cr_sec_income
-              CDOABCP =~ cr_cds_purchased + cr_trs_purchased + cr_co_purchased + cr_cdoth_purchased + cr_ta_secveh + cr_ta_abcp + cr_sec_income
+## Alternative multilevel
+formula1 = '''LS =~ cr_as_nonsec + 1*hmda_gse_amount + hmda_priv_amount + cr_ls_income + cr_serv_fees
+              SEC1 =~ cr_as_sec + 1*hmda_sec_amount + cr_ce_sec + cr_serv_fees + cr_ta_secveh + cr_sec_income
+              SEC2 =~ cr_cds_purchased + cr_trs_purchased + cr_co_purchased + cr_cdoth_purchased + cr_ta_secveh + cr_ta_abcp + cr_sec_income + cr_serv_fees
+              GENSEC =~ SEC1 + SEC2
               
-              # Latent variables
-              DEFINE(latent) LS ABS CDOABCP 
+              DEFINE(latent) LS SEC1 SEC2 GENSEC
               
-              # Correlations
-              LS ~~ ABS
-              ABS ~~ CDOABCP
-              ''' 
-              
-formula1_ord = '''# Measurement model
-              LS =~ cr_as_nonsec + hmda_gse_amount + hmda_priv_amount + cr_ls_income + cr_serv_fees
-              ABS =~ cr_as_sec + hmda_sec_amount + cr_ce_sec + cr_serv_fees + cr_ta_secveh + cr_sec_income
-              CDOABCP =~ cr_cds_purchased + cr_trs_purchased + cr_co_purchased + cr_cdoth_purchased + cr_ta_secveh + cr_ta_abcp + cr_sec_income
-              
-              # Latent variables
-              DEFINE(latent) LS ABS CDOABCP 
-              
-              # Correlations
-              LS ~~ ABS
-              ABS ~~ CDOABCP
-              DEFINE(ordinal) cr_as_nonsec hmda_gse_amount hmda_priv_amount cr_as_sec hmda_sec_amount cr_ce_sec cr_ta_secveh cr_cds_purchased cr_trs_purchased cr_co_purchased cr_cdoth_purchased cr_ta_abcp
+              LS ~~ GENSEC
               ''' 
 
+## No multilevel
 formula2 = '''# Measurement model
+              LS =~ cr_as_nonsec + hmda_gse_amount + hmda_priv_amount + cr_ls_income + cr_serv_fees
+              ABS =~ cr_as_sec + hmda_sec_amount + cr_ce_sec + cr_serv_fees + cr_ta_secveh + cr_sec_income
+              CDOABCP =~ cr_cds_purchased + cr_trs_purchased + cr_co_purchased + cr_cdoth_purchased + cr_ta_secveh + cr_ta_abcp + cr_sec_income
+              
+              # Latent variables
+              DEFINE(latent) LS ABS CDOABCP 
+              
+              # Correlations
+              LS ~~ ABS
+              ABS ~~ CDOABCP
+              ''' 
+
+formula3 = '''# Measurement model
               LS =~ cr_as_nonsec + hmda_gse_amount + hmda_priv_amount + cr_ls_income + cr_serv_fees
               ABS =~ cr_as_sec + hmda_sec_amount + cr_ce_sec
               CDOABCP =~ cr_cds_purchased + cr_trs_purchased + cr_co_purchased + cr_cdoth_purchased + cr_ta_abcp
-              GENSEC =~ cr_sec_income  + cr_serv_fees + cr_ta_secveh 
+              GENSEC =~ cr_sec_income + cr_serv_fees + cr_ta_secveh 
               
               # Latent variables
               DEFINE(latent) LS ABS CDOABCP GENSEC
@@ -392,7 +366,6 @@ formula2 = '''# Measurement model
               CDOABCP ~~ GENSEC
               ''' 
 
-
 ## No loan sales
 formula3= ''' SEC1 =~ cr_as_sec + hmda_sec_amount + cr_ce_sec + cr_serv_fees + cr_ta_secveh + cr_sec_income
               SEC2 =~ cr_cds_purchased + cr_trs_purchased + cr_co_purchased + cr_cdoth_purchased + cr_ta_secveh + cr_ta_abcp + cr_sec_income
@@ -400,57 +373,99 @@ formula3= ''' SEC1 =~ cr_as_sec + hmda_sec_amount + cr_ce_sec + cr_serv_fees + c
               
               DEFINE(latent) SEC1 SEC2 GENSEC
               ''' 
-## Fix factor variance to one
 
 
 
-formula1 =  '''LS =~ cr_as_nonsec + hmda_priv_amount + cr_ls_income + hmda_gse_amount + cr_serv_fees
-               GENSEC =~ cr_serv_fees + cr_ta_secveh + cr_ta_vie_other + cr_sec_income 
-               ABS =~ cr_as_sec + hmda_sec_amount
-               CDOABCP =~ cr_cds_purchased + cr_trs_purchased + cr_co_purchased + cr_cdoth_purchased + cr_ta_abcp'''
+# formula1 =  '''LS =~ cr_as_nonsec + hmda_priv_amount + cr_ls_income + hmda_gse_amount + cr_serv_fees
+#                GENSEC =~ cr_serv_fees + cr_ta_secveh + cr_ta_vie_other + cr_sec_income 
+#                ABS =~ cr_as_sec + hmda_sec_amount
+#                CDOABCP =~ cr_cds_purchased + cr_trs_purchased + cr_co_purchased + cr_cdoth_purchased + cr_ta_abcp'''
 
 
-formula2 = '''LS =~ hmda_gse_amount + hmda_priv_amount + cr_ls_income + cr_as_nonsec + cr_serv_fees
-              SEC1 =~ cr_as_sec + hmda_sec_amount + cr_serv_fees + cr_ta_secveh + cr_sec_income
-              SEC2 =~ cr_cd_net + cr_ta_abcp + cr_ta_secveh + cr_sec_income
+# formula2 = '''LS =~ hmda_gse_amount + hmda_priv_amount + cr_ls_income + cr_as_nonsec + cr_serv_fees
+#               SEC1 =~ cr_as_sec + hmda_sec_amount + cr_serv_fees + cr_ta_secveh + cr_sec_income
+#               SEC2 =~ cr_cd_net + cr_ta_abcp + cr_ta_secveh + cr_sec_income
               
-              LS ~~ SEC1
-              LS ~~ SEC2
-              SEC1 ~~ SEC2''' 
+#               LS ~~ SEC1
+#               LS ~~ SEC2
+#               SEC1 ~~ SEC2''' 
              
-formula3 = '''LS =~ hmda_gse_amount + hmda_priv_amount + cr_ls_income + cr_as_nonsec + cr_serv_fees
-              SECINC =~ cr_serv_fees + cr_sec_income
-              SECASSETS =~ cr_as_sec + hmda_sec_amount + cr_cd_net + cr_ta_abcp + cr_ta_secveh
+# formula3 = '''LS =~ hmda_gse_amount + hmda_priv_amount + cr_ls_income + cr_as_nonsec + cr_serv_fees
+#               SECINC =~ cr_serv_fees + cr_sec_income
+#               SECASSETS =~ cr_as_sec + hmda_sec_amount + cr_cd_net + cr_ta_abcp + cr_ta_secveh
               
-              LS ~~ SECINC
-              LS ~~ SECASSETS
-              SECINC ~~ SECASSETS
-          '''
+#               LS ~~ SECINC
+#               LS ~~ SECASSETS
+#               SECINC ~~ SECASSETS
+#           '''
           
-formula4 = '''TA =~ cr_ta_abcp + cr_ta_secveh + cr_ta_vie_other
-              INC =~ cr_serv_fees + cr_sec_income + cr_ls_income
-              OTHER =~ hmda_gse_amount + hmda_priv_amount + cr_as_nonsec + cr_as_sec + hmda_sec_amount + cr_cd_net
+# formula4 = '''TA =~ cr_ta_abcp + cr_ta_secveh + cr_ta_vie_other
+#               INC =~ cr_serv_fees + cr_sec_income + cr_ls_income
+#               OTHER =~ hmda_gse_amount + hmda_priv_amount + cr_as_nonsec + cr_as_sec + hmda_sec_amount + cr_cd_net
           
-              TA ~~ INC
-              TA ~~ OTHER
-              INC ~~ OTHER'''
+#               TA ~~ INC
+#               TA ~~ OTHER
+#               INC ~~ OTHER'''
               
-formula5 = '''LS =~ hmda_gse_amount + hmda_priv_amount + cr_ls_income + cr_as_nonsec + cr_serv_fees
-              ABS =~ cr_as_sec + hmda_sec_amount + cr_ta_secveh + cr_sec_income  + cr_serv_fees
-              CDO =~ cr_cd_net + cr_ta_secveh + cr_sec_income  + cr_serv_fees
+# formula5 = '''LS =~ hmda_gse_amount + hmda_priv_amount + cr_ls_income + cr_as_nonsec + cr_serv_fees
+#               ABS =~ cr_as_sec + hmda_sec_amount + cr_ta_secveh + cr_sec_income  + cr_serv_fees
+#               CDO =~ cr_cd_net + cr_ta_secveh + cr_sec_income  + cr_serv_fees
               
-              LS ~~ ABS
-              LS ~~ CDO
-              ABS ~~ CDO
-           '''
+#               LS ~~ ABS
+#               LS ~~ CDO
+#               ABS ~~ CDO
+#            '''
 
 #--------------------------------------------
 # Run CFA models
 #--------------------------------------------
 
-res = CFA(formula1_ord, df_sec, obj = 'GLS', robust = False).fit()
-# TODO: Volg PRELIS en gebruik normal score transformation voor all censored (corner) variabelen. Daarna ADF/WLS
+# Set procedure
+def CFAWrapper(formula, obj, filename, robust = False, solver = 'SLSQP'):
+    ### Fit model
+    res = CFA(formula, df_log, obj = obj, robust = robust, solver = solver).fit()
+    
+    ### Get results
+    #### Sample covariance matrix 
+    cov = df_sec[res.mod_semopy.vars['observed']].cov()
+    
+    #### Tobit covariance/correlation matrix (polychoric/polyserial)
+    poly_cov = pd.DataFrame(res.mod_semopy.mx_cov, index = res.mod_semopy.vars['observed'], columns = res.mod_semopy.vars['observed'])
+    
+    #### Model implied covariance matrix
+    sigma = pd.DataFrame(res.mod_semopy.calc_sigma()[0], index = res.mod_semopy.vars['observed'], columns = res.mod_semopy.vars['observed'])
+    
+    #### Results table
+    results = res.results
+    
+    #### Model evaluation statistics 
+    #### NOTE: SRMR not correct with poly... covariances
+    eval_stats = res.eval_stats
+    
+    #### Standardized residuals
+    std_resid = pd.DataFrame(res.std_resid, index = res.mod_semopy.vars['observed'], columns = res.mod_semopy.vars['observed'])
+    
+    ### Save to a zip file
+    with ZipFile('Results/{}.zip'.format(filename), 'w') as csv_zip:    
+        csv_zip.writestr('cov.csv', data = cov.to_csv())
+        csv_zip.writestr('poly_cov.csv', data = poly_cov.to_csv())
+        csv_zip.writestr('sigma.csv', data = sigma.to_csv())
+        csv_zip.writestr('results.csv', data = results.to_csv())
+        csv_zip.writestr('eval_stats.csv', data = eval_stats.to_csv())
+        csv_zip.writestr('std_resid.csv', data = std_resid.to_csv())
+        
+    ### Draw path diagram
+    semplot(res.mod_semopy, r'Figures\CFA_path_diagrams\{}.PNG'.format(filename),  plot_covs = True, show = False)
+    
+# Loop over all formulas
+## Waller/Muthen (1991) Generic Tobit Factor Analysis (GTFA) procedure
+## TODO
 
-g = semplot(res.mod_semopy, r"D:\RUG\PhD\Materials_papers\01-Note_on_securitization\Figures\CFA_path_diagrams\test.PNG",  plot_covs = True, show = False)
+## ADF procedure
+formulas = [formula0, formula1, formula3]
+filenames = ['formula0', 'formula1']
 
+for formula, filename in zip(formulas,filenames):
+    CFAWrapper(formula, 'WLS', filename, robust = False, solver = 'SLSQP')
 
+res = CFA(formula0, df_log, obj = 'WLS', robust = False, solver = 'SLSQP').fit()

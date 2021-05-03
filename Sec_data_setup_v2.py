@@ -28,6 +28,11 @@ from joblib import Parallel, delayed
 # Finding duplicates
 import collections
 
+# Plotting
+import matplotlib.pyplot as plt
+import seaborn as sns
+sns.set(style = 'whitegrid', font_scale = 2)
+
 # Set WD
 import os
 os.chdir(r'D:\RUG\PhD\Materials_papers\01-Note_on_securitization')
@@ -38,7 +43,7 @@ os.chdir(r'D:\RUG\PhD\Materials_papers\01-Note_on_securitization')
 
 # Set start and end date
 start = 2011
-end = 2020 
+end = 2018
 
 # Get the number of cores
 num_cores = mp.cpu_count()
@@ -74,6 +79,9 @@ file_info = r'/call{}12.xpt'
 ## RI
 file_ri = r'/{}/FFIEC CDR Call Schedule RI 1231{}.txt'
 
+## RC
+file_rc = r'/{}/FFIEC CDR Call Schedule RC 1231{}.txt'
+
 ## RC-D
 file_rcd = r'/{}/FFIEC CDR Call Schedule RCD 1231{}.txt'
 
@@ -84,9 +92,6 @@ file_rcl_2 = r'/{}/FFIEC CDR Call Schedule RCL 1231{}(2 of 2).txt'
 ## RC-S
 file_rcs = r'/{}/FFIEC CDR Call Schedule RCS 1231{}.txt'
 
-## SU
-file_su = r'/{}/FFIEC CDR Call Schedule SU 1231{}.txt' #from 2017 only
-
 ## RC-V
 file_rcv = r'/{}/FFIEC CDR Call Schedule RCV 1231{}.txt'
 
@@ -96,6 +101,9 @@ vars_info = ['IDRSSD', 'RSSD9048', 'RSSD9424', 'RSSD9210']
 
 ## RI
 vars_ri = '|'.join(['IDRSSD','B492','B493','5416'])
+
+## RC
+vars_rc = '|'.join(['IDRSSD','2170'])
 
 ## RC-D
 vars_rcd = '|'.join(['IDRSSD','F654'])
@@ -109,17 +117,13 @@ vars_rcs = '|'.join(['IDRSSD', 'B705', 'B706', 'B707', 'B708',\
                      'B709', 'B710', 'B711', 'B790', 'B791',\
                      'B792', 'B793', 'B794', 'B795', 'B796',\
                      'B776', 'B777', 'B778', 'B779', 'B780',\
-                     'B781', 'B782',])
-
-## SU
-vars_su = '|'.join(['IDRSSD', 'FT08', 'FT10', 'FT14'])
+                     'B781', 'B782','B806','B807','B808','B809',\
+                     'A249'])
 
 ## RC-V
 vars_rcv = '|'.join(['IDRSSD'] + ['J{}'.format(i) for i in range(981, 999 + 1)] +\
-                    ['K{}'.format(str(i).zfill(3)) for i in range(1, 14 + 1)] +\
-                    ['K030', 'K031', 'K032'] +\
-                    ['HU{}'.format(i) for i in range(20, 23 + 1)] +\
-                    ['JF84', 'JF87', 'JF89', 'JF91', 'JF90', 'JF77'])
+                    ['K{}'.format(str(i).zfill(3)) for i in range(1, 35 + 1)] +\
+                    ['K030', 'K031', 'K032'])
 
 #--------------------------------------------
 # Set functions
@@ -169,19 +173,19 @@ def combineVars(data, elem):
 if __name__ == '__main__':
     df_info = pd.concat(Parallel(n_jobs=num_cores)(delayed(loadInfo)(i) for i in range(start - 2000, end - 2000)))
     df_ri = pd.concat(Parallel(n_jobs=num_cores)(delayed(loadGeneral)(i, file_ri, vars_ri) for i in range(start, end)))
+    df_rc = pd.concat(Parallel(n_jobs=num_cores)(delayed(loadGeneral)(i, file_rc, vars_rc) for i in range(start, end)))
     df_rcd = pd.concat(Parallel(n_jobs=num_cores)(delayed(loadGeneral)(i, file_rcd, vars_rcd) for i in range(start, end)))
     df_rcl = pd.concat(Parallel(n_jobs=num_cores)(delayed(loadRCL)(i) for i in range(start, end)))
     df_rcs = pd.concat(Parallel(n_jobs=num_cores)(delayed(loadGeneral)(i, file_rcs, vars_rcs) for i in range(start, end)))
-    df_su = pd.concat(Parallel(n_jobs=num_cores)(delayed(loadGeneral)(i, file_su, vars_su) for i in range(2017, end)))
     df_rcv = pd.concat(Parallel(n_jobs=num_cores)(delayed(loadGeneral)(i, file_rcv, vars_rcv) for i in range(start, end)))
     
 # Concat all dfs
 df_cr_raw = df_info.set_index(['IDRSSD','date']).join([df_ri.set_index(['IDRSSD','date']),\
+                           df_rc.set_index(['IDRSSD','date']),\
                            df_rcd.set_index(['IDRSSD','date']),\
                            df_rcl.set_index(['IDRSSD','date']),\
                            df_rcs.set_index(['IDRSSD','date']),\
                            df_rcv.set_index(['IDRSSD','date'])], how = 'inner')
-df_cr_raw = df_cr_raw.merge(df_su.set_index(['IDRSSD','date']), how = 'left', left_index = True, right_index = True)
     
 #--------------------------------------------
 # Transform variables
@@ -209,6 +213,9 @@ df_cr = df_cr_raw[(df_cr_raw.RSSD9048 == 200) & (df_cr_raw.RSSD9424 != 0)]
 ''' Based on the state codes provided by the FRB'''
 df_cr = df_cr[df_cr.RSSD9210.isin(range(1,57))]
 
+## Remove all banks with less than 1 billion in total assets
+df_cr = df_cr[df_cr.RC2170 >= 1e6]
+
 #--------------------------------------------
 # Home Mortgage Disclosure Act
 #--------------------------------------------
@@ -219,7 +226,7 @@ df_cr = df_cr[df_cr.RSSD9210.isin(range(1,57))]
 
 #--------------------------------------------
 # Setup
-
+# NOTE: Script can also handle data from 2018-19
 # Get Paths
 path_lf = r'D:/RUG/Data/Data_HMDA_lenderfile/'
 path_hmda = r'D:/RUG/Data/Data_HMDA/LAR/'
@@ -275,6 +282,20 @@ lf_reshaped_list[-1]['date'] = 2019
 # Make df
 df_lf_reshaped = pd.concat(lf_reshaped_list)
 
+## Make state code dictionary
+statecodes = list(range(1,56+1))
+
+for elem in statecodes:
+    if elem in [3,7,14,43,52]:
+        statecodes.remove(elem)
+        
+states =[x for x in ["AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DC", "DE", "FL", "GA", 
+          "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD", 
+          "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", 
+          "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC", 
+          "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY"]]
+state_dict = dict(zip(states,statecodes))
+
 #--------------------------------------------
 # Set functions
 
@@ -309,12 +330,27 @@ def loadCleanHMDA(year):
             ## NOTE Fill the missings with the tax codes. After visual check, some arid_2017 are missing. However, the tax_id corresponds to the resp_id pre 2018
             chunk['respondent_id'] = chunk.apply(lambda x: x.tax_id if x.arid_2017 == '-1' else str(x.arid_2017)[1:], axis = 1).replace('-1',np.nan).str.zfill(10)
         
-                # Filter data
+        # Filter data
+        ## Drop all negative and zero incomes
+        chunk = chunk[chunk.applicant_income_000s > 0]
+        
         ## Make a fips column and remove separate state and county
         if year < 2018:
             chunk['fips'] = chunk['state_code'].str.zfill(2) + chunk['county_code'].str.zfill(3)
         else:
-            chunk['fips'] =  chunk['county_code'].str.zfill(5)
+            ## NOTE: we use numpy select to correct mistakes made in the county codes (aka when the state code part is missing)
+            conditions = [(chunk.county_code.astype(float) < 1001), (chunk.county_code.astype(float) >= 1001)]
+            choices  = [chunk.replace({'state_code':state_dict}).state_code.astype(str).str.zfill(2) + \
+                    chunk['county_code'].str.zfill(5).str[2:], chunk['county_code'].str.zfill(5)]
+            
+            chunk['fips'] = np.select(conditions, choices, default = chunk['county_code'].str.zfill(5))
+            
+
+        chunk.drop(columns = ['state_code', 'county_code'], inplace = True)
+        
+        ## Remove all unknown MSAMDs and FIPS
+        chunk = chunk[(chunk.msamd.astype(float) != 0) &\
+                      (chunk.msamd.astype(float) != 99999) & (chunk.fips.astype(float) != 99999)]
     
         ## Add variables
         ''' List of new vars
@@ -369,7 +405,7 @@ if __name__ == '__main__':
 # 2) CR HMDA
 df_cr.reset_index(inplace = True)
 
-df_raw = df_cr.reset_index().merge(df_hmda, left_on = ['date','IDRSSD'],\
+df_raw = df_cr.merge(df_hmda, left_on = ['date','IDRSSD'],\
                             right_on = ['date','entity'], how = 'left')
 
 #--------------------------------------------
@@ -421,33 +457,51 @@ df['cr_se_on'] = df_raw.loc[:,['RCFDS475','RCFDS480','RCFDS485','RCFDS490']].sum
 df['cr_se_off'] = df_raw.RCFDS495
 '''
 # Assets sold and securitized with recourse 
-df['cr_as_sec'] = df_raw.loc[:,['RCB{}'.format(i) for i in range(705,711+1)] +\
-  ['RCONFT08']].sum(axis = 1)
+df['cr_as_sec'] = df_raw.loc[:,['RCB{}'.format(i) for i in range(705,711+1)]].sum(axis = 1)
+df['cr_as_rmbs'] = df_raw.RCB705
+df['cr_as_abs'] = df_raw.loc[:,['RCB{}'.format(i) for i in range(706,711+1)]].sum(axis = 1)
 
 # Assets sold and not securitized with recourse
-df['cr_as_nonsec'] = df_raw.loc[:,['RCB{}'.format(i) for i in range(790,796+1)] +\
-  ['RCONFT10']].sum(axis = 1)
+df['cr_as_nonsec'] = df_raw.loc[:,['RCB{}'.format(i) for i in range(790,796+1)]].sum(axis = 1)
 
 # Maximum amount of credit exposure provided to other institutions
-df['cr_ce_sec'] = df_raw.loc[:,['RCB{}'.format(i) for i in range(776,782+1)] +\
-  ['RCONFT14']].sum(axis = 1)
+df['cr_ce_sec'] = df_raw.loc[:,['RCB{}'.format(i) for i in range(776,782+1)]].sum(axis = 1)
+df['cr_ce_rmbs'] = df_raw.RCB776
+df['cr_ce_abs'] = df_raw.loc[:,['RCB{}'.format(i) for i in range(777,782+1)]].sum(axis = 1)
+
+# Outstanding principle balance small business obligations transferred with recourse
+df['cr_as_sbo'] = df_raw.RCA249
+
+# Maximum credit exposure to ABCP conduits (sponsered by the institution itself or by others)
+df['cr_abcp_ce'] = df_raw.loc[:,['RCB806','RCB807']].sum(axis = 1)
+
+# Unused commitments to provide liquidity to ABCP conduits (sponsered by the institution itself or by others)
+df['cr_abcp_uc'] = df_raw.loc[:,['RCB808','RCB809']].sum(axis = 1)
 
 # Total Assets Securitization Vehicles
+# NOTE: We only use the total assets of the securitization vehicles, because there is no
+# straight-forward variable measuring outstanding ABSs/CDOs. These vehicles can be both
+# ABS SPVs or CDO SPVs (or anything similar but not ABCP conduits/SIV)
 vars_secveh = ['RCJ{}'.format(i) for i in range(981,999+1,3)] +\
               ['RCK{}'.format(str(i).zfill(3)) for i in range(3,12+1,3)] + \
-              ['RCK030','RCHU20','RCHU22','RCJF91']
-df['cr_ta_secveh'] = df_raw.loc[:,vars_secveh].sum(axis = 1)
+              ['RCK030']
+df['cr_secveh_ta'] = df_raw.loc[:,vars_secveh].sum(axis = 1)
 
 # Total Assets ABCP Conduits
+# NOTE: The real exposure to ABCP comes from the conduits liabilities, especially
+# its commercial papers and repos. We included total assets in case these two 
+# variables do not have enough variation 
 vars_abcp = ['RCJ{}'.format(i) for i in range(982,997+1,3)] +\
               ['RCK{}'.format(str(i).zfill(3)) for i in range(1,13+1,3)] + \
-              ['RCK032','RCJF77']
-df['cr_ta_abcp'] = df_raw.loc[:,vars_abcp].sum(axis = 1)
+              ['RCK032']
+df['cr_abcp_ta'] = df_raw.loc[:,vars_abcp].sum(axis = 1)
+df['cr_abcp_cp'] = df_raw.RCK022
+df['cr_abcp_repo'] = df_raw.RCK016 # ALL ZERO
 
 # Total Assets Other VIE
 vars_vie_other = ['RCJ{}'.format(i) for i in range(983,988+1,3)] +\
               ['RCK{}'.format(str(i).zfill(3)) for i in range(2,14+1,3)] + \
-              ['RCK031','RCHU21','RCHU23','RCJF89','RCJF90','RCJF87']
+              ['RCK031']
 df['cr_ta_vie_other'] = df_raw.loc[:,vars_vie_other].sum(axis = 1)
 
 #--------------------------------------------
@@ -455,7 +509,39 @@ df['cr_ta_vie_other'] = df_raw.loc[:,vars_vie_other].sum(axis = 1)
 df.fillna(0, inplace = True)
 
 # Remove negative values in cr_ta_secveh
-df = df[df.cr_ta_secveh >= 0]
+df = df[df.cr_secveh_ta >= 0]
+
+# NOTE: All bank-years have at least one non-zero value 
+
+# Remove outliers
+vars_tot = df.columns[2:]
+lst_outliers = []
+
+## Make box plots
+def boxPlots(var):
+    fig, ax = plt.subplots(figsize=(12, 8))
+    plt.title('{}'.format(var))
+    
+    data = df[var].dropna()
+    ax.boxplot(data)
+    
+    plt.xticks([1], ['Securitizers Only'])
+    
+    fig.savefig('Figures/Box_plots/Box_{}.png'.format(var)) 
+    plt.clf()
+
+for var in vars_tot:
+    boxPlots(var)
+
+'''Notes:
+    Only one clear outlier (nsmallest) in cr_serv_fees (1)
+    '''
+
+## Drop cr_abcp_repo
+df.drop(columns = 'cr_abcp_repo', inplace = True)
+    
+## Remove outliers
+df = df.loc[df.cr_serv_fees != df.cr_serv_fees.min(),:]
 
 #--------------------------------------------
 # Save Data

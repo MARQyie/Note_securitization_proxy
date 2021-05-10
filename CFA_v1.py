@@ -57,24 +57,10 @@ df = df[df.columns.sort_values()]
 
 # set variable names
 # Variable names
-vars_tot = [var for var in df.columns if var not in ['IDRSSD','date','cr_cd_purchased','cr_cd_sold', 'cr_cds_sold', 'cr_trs_sold', 'cr_co_sold', 'cr_cdoth_sold']]
-
-# Subset data to only include securitizers
-# TODO REMOVE
-#unique_idrssd = df[(df[vars_tot] > 0).any(axis = 1)].IDRSSD.unique()
-#df_sec = df.loc[df.IDRSSD.isin(unique_idrssd),vars_tot]
-df_sec = df.loc[(df[vars_tot] != 0).any(axis = 1),vars_tot]
+vars_tot = [var for var in df.columns if var not in ['IDRSSD','date','cr_cd_purchased','cr_cd_sold', 'cr_cds_sold', 'cr_trs_sold', 'cr_co_sold', 'cr_cdoth_sold', 'cr_ta_vie_other', 'cr_as_sec', 'cr_ce_sec']]
 
 # Take logs of the data
-df_log = np.log(df_sec - df_sec.min() + 1) 
-# Todo: think of something for the income variables
-
-# standardize data
-#df_standard = pd.DataFrame(preprocessing.scale(df_sec[vars_tot]), columns = vars_tot)
-#df_normal = pd.DataFrame(preprocessing.normalize(df_sec[vars_tot]), columns = vars_tot)
-
-# binary data
-#df_binary = (df_sec != 0) * 1
+df_log = np.log(df[vars_tot] - df[vars_tot].min() + 1) 
 
 # Use power transformation to force normality on the data
 #from sklearn.preprocessing import PowerTransformer
@@ -82,14 +68,8 @@ df_log = np.log(df_sec - df_sec.min() + 1)
 #df_power = pd.DataFrame(pt.fit_transform(df_sec), columns = vars_tot)
 
 # Check definiteness of the var-cov matrix
-cov = df_sec[vars_tot].cov()
-definite_cov = np.all(np.linalg.eigvals(cov) > 0) # True
-
 cov_log = df_log[vars_tot].cov()
 definite_cov_log = np.all(np.linalg.eigvals(cov_log) > 0) # True
-
-#cov_std = df_standard[vars_tot].cov()
-#definite_cov_std = np.all(np.linalg.eigvals(cov_std) > 0) # True
 
 #--------------------------------------------
 # Setup factor analysis class funciton
@@ -117,9 +97,78 @@ class ModelEval:
         
         return dof, dof_base, baseline_model
     
+    def Bootstrapwrapper(self, chi):
+        '''Wrapper method for ADF Chi2 bootstrap'''
+        # Run boostrap
+        s, gamma = self.BootstrapChiADF()
+        s = pd.DataFrame(s, index = self.mod_semopy.vars['observed'],\
+                         columns = self.mod_semopy.vars['observed'])
+            
+        # Get new results (no need to run inspector)
+        # NOTE: in May 2021 semopy cannot handle custom weighting matrices for 
+        # its WLS procedure. Make sure you mod semopy such that it can handle them
+        model = Model(self.equation, mimic_lavaan = self.mimic_lavaan, baseline = self.bool_baseline)
+        est = model.fit(self.data, cov = s, obj = self.obj, solver = self.solver, custom_w = gamma)
+        
+        # Get Chi2_b, Corrected Chi2 and the chi2 bias
+        chi_b = stats.calc_chi2(model)[0]
+        chi_corr = 2 * chi - chi_b
+        bias_chi2 = chi_b - chi
+        
+        return chi_b, chi_corr, bias_chi2
+    
+    def BootstrapChiADF(self):
+        '''Method that implements the bootstrap procedure for the 
+            ADF Chi2 statistic based on Yung/Bentler 1994.
+            Not meant for the baseline Chi2.'''
+        x = self.data
+        variables = self.mod_semopy.vars['observed']
+        s = list()
+        B = self.B
+        
+        # Load packages and set seed
+        from sklearn.utils import resample
+        from semopy.utils import cov
+        np.random.seed(0)
+        
+        for i in range(B):
+            zero_bool = True
+            
+            while zero_bool:
+                x_res = resample(x[variables], replace = True)
+            
+                # Check zero columns, is zero column resample
+                if not (x_res == 0).all().any():
+                    zero_bool = False
+            x_res.reset_index(inplace = True, drop = True)
+            
+            # Get covariance matrix
+            s.append(cov(x_res))
+        
+        # Get mean of the covariance matrix and vectorize the upper triangle
+        s_mean = sum(s) / B
+        s_mean_tri = s_mean[np.triu_indices(s_mean.shape[0])]
+        
+        # Get Gamma matrix
+        # TODO Correct?
+        s_smean = [mat[np.triu_indices(mat.shape[0])] - s_mean_tri for mat in s]
+        gamma_mean = x.shape[0] * sum([np.einsum('i,j->ij', mat, mat) for mat in s_smean]) / (B-1)
+        
+        return s_mean, gamma_mean
+    
     def Chi2(self, model, dof, dataframe):
-        if self.bool_robust: # SB scaling
-            chi_stat = (model.n_samples * model.last_result.fun) / (dataframe[model.vars['observed']].kurtosis().mean()) #KLOPT NIET
+        if self.bool_robust: 
+            chi_stat = model.n_samples * model.last_result.fun
+            #chi_stat = (model.n_samples * model.last_result.fun) / (1 + (model.n_samples * model.last_result.fun) / model.n_obs) # Yuan Bentler T2
+            #TODO FIX, Klopt niet!
+        elif self.bool_bootstrapchi: # ADF Chi2 correction a la Yung Bentler 1994
+            chi_stat = model.n_samples * model.last_result.fun
+            chi_b, chi_corr, bias_chi = self.Bootstrapwrapper(chi_stat)
+            
+            chi_p = 1 - chi2.cdf(chi_stat, dof)
+            chi_corr_p = 1 - chi2.cdf(chi_corr, dof)
+            
+            return chi_stat, chi_p, chi_b, chi_corr, chi_corr_p, bias_chi
         else:
             chi_stat = model.n_samples * model.last_result.fun
         chi_p = 1 - chi2.cdf(chi_stat, dof)
@@ -146,41 +195,38 @@ class ModelEval:
         
         return s, sigma, resid_cov, resid_cov_std, srmr
     
-    def GoodnessOfFit(self, model, base_model, dataframe, standardized_stats):
+    def GoodnessOfFit(self, model, base_model, dataframe):
         ## chi2
-        chi_stat, chi_p = self.Chi2(model, self.dof, dataframe)
-        chi_base_stat, chi_base_p = self.Chi2(base_model, self.dof_base, dataframe)
+        if self.bool_bootstrapchi:
+            chi_orig_stat, chi_orig_p, chi_b, chi_stat, chi_p, bias_chi = self.Chi2(model, self.dof, dataframe)
+            chi_base_stat, chi_base_p, _, _, _, _ = self.Chi2(base_model, self.dof_base, dataframe, )
+        else:
+            chi_stat, chi_p = self.Chi2(model, self.dof, dataframe)
+            chi_base_stat, chi_base_p = self.Chi2(base_model, self.dof_base, dataframe)
         
         ## SRMR
         s, sigma, epsilon, epsilon_standard, srmr = self.SRMR()
         
+        # TODO: Checken welke CHI2
         ## RMSEA
-        if standardized_stats:
-            rmsea = stats.calc_rmsea(model, chi_stat, self.dof_std)
-        else:
-            rmsea = stats.calc_rmsea(model, chi_stat, self.dof)
+        rmsea = stats.calc_rmsea(model, chi_stat, self.dof)
         
         ## CFI/TFI
-        if standardized_stats:
-            cfi = stats.calc_cfi(model, self.dof_std, chi_stat,  self.dof_std_base, chi_base_stat)
-            tli = stats.calc_tli(model, self.dof_std, chi_stat, self.dof_std_base, chi_base_stat)
-        else:   
-            cfi = stats.calc_cfi(model, self.dof, chi_stat,  self.dof_base, chi_base_stat)
-            tli = stats.calc_tli(model, self.dof, chi_stat, self.dof_base, chi_base_stat)
+        cfi = stats.calc_cfi(model, self.dof, chi_stat,  self.dof_base, chi_base_stat)
+        tli = stats.calc_tli(model, self.dof, chi_stat, self.dof_base, chi_base_stat)
         
         ## GFI/AGFI
-        if standardized_stats:
-            gfi = stats.calc_gfi(model, chi_stat, chi_base_stat)
-            agfi = stats.calc_agfi(model, self.dof_std, self.dof_std_base, gfi)
-        else:   
-            gfi = stats.calc_gfi(model, chi_stat, chi_base_stat)
-            agfi = stats.calc_agfi(model, self.dof, self.dof_base, gfi)
+        gfi = stats.calc_gfi(model, chi_stat, chi_base_stat)
+        agfi = stats.calc_agfi(model, self.dof, self.dof_base, gfi)
     
         ## AIC/BIC
         aic = stats.calc_aic(model)
         bic = stats.calc_bic(model)
         
-        return chi_stat, chi_p, chi_base_stat, chi_base_p, srmr, rmsea, cfi, tli, gfi, agfi, aic, bic
+        if self.bool_bootstrapchi:
+            return chi_orig_stat, chi_orig_p, chi_b, chi_stat, chi_p, bias_chi, chi_base_stat, chi_base_p, srmr, rmsea, cfi, tli, gfi, agfi, aic, bic
+        else:
+            return chi_stat, chi_p, chi_base_stat, chi_base_p, srmr, rmsea, cfi, tli, gfi, agfi, aic, bic
     
     def IllnessOfFit(self):
         # Standardized residuals
@@ -191,23 +237,24 @@ class ModelEval:
     def tableGoodnessOfFit(self, chi_stat, chi_p, chi_base_stat, chi_base_p, srmr, rmsea, cfi, tli, gfi, agfi, aic, bic):
         return pd.DataFrame([['chi_stat','chi_p','chi_base_stat', 'chi_base_p', 'srmr', 'rmsea','cfi','tli','gfi','agfi','aic','bic'],[chi_stat, chi_p, chi_base_stat, chi_base_p, srmr, rmsea, cfi, tli, gfi, agfi, aic, bic]]).T
     
-    def EvalStats(self, model, dataframe, standardized_stats = False):
+    def tableGoodnessOfFitBootstrap(self, chi_orig_stat, chi_orig_p, chi_b, chi_stat, chi_p, bias_chi, chi_base_stat, chi_base_p, srmr, rmsea, cfi, tli, gfi, agfi, aic, bic):
+        return pd.DataFrame([['chi_orig_stat', 'chi_orig_p', 'chi_b', 'chi_stat', 'chi_p', 'bias_chi','chi_base_stat', 'chi_base_p', 'srmr', 'rmsea','cfi','tli','gfi','agfi','aic','bic'],[chi_orig_stat, chi_orig_p, chi_b, chi_stat, chi_p, bias_chi, chi_base_stat, chi_base_p, srmr, rmsea, cfi, tli, gfi, agfi, aic, bic]]).T
+    
+    def EvalStats(self, model, dataframe):
         '''Wrapper function to calculate 'the 'statistics'''
         # prelim
-        if standardized_stats:
-            self.dof_std, self.dof_std_base, self.mod_std_base_semopy = self.Misc(model, dataframe)
-            base_model = self.mod_std_base_semopy
-        else:   
-            self.dof, self.dof_base, self.mod_base_semopy = self.Misc(model, dataframe)
-            base_model = self.mod_base_semopy
+        self.dof, self.dof_base, self.mod_base_semopy = self.Misc(model, dataframe)
+        base_model = self.mod_base_semopy
         
-        # calculate goodness of fit statistics
-        chi_stat, chi_p, chi_base_stat, chi_base_p, srmr, rmsea, cfi, tli, gfi, agfi, aic, bic = self.GoodnessOfFit(model, base_model, dataframe, standardized_stats)
-    
         ## Make pandas dataframe from the stats
-        eval_stats = self.tableGoodnessOfFit(chi_stat, chi_p, chi_base_stat, chi_base_p, srmr, rmsea, cfi, tli, gfi, agfi, aic, bic)
-        
-        return chi_stat, chi_p, chi_base_stat, chi_base_p, srmr, rmsea, cfi, tli, gfi, agfi, aic, bic, eval_stats
+        if self.bool_bootstrapchi:
+            chi_orig_stat, chi_orig_p, chi_b, chi_stat, chi_p, bias_chi, chi_base_stat, chi_base_p, srmr, rmsea, cfi, tli, gfi, agfi, aic, bic = self.GoodnessOfFit(model, base_model, dataframe)
+            eval_stats = self.tableGoodnessOfFitBootstrap(chi_orig_stat, chi_orig_p, chi_b, chi_stat, chi_p, bias_chi, chi_base_stat, chi_base_p, srmr, rmsea, cfi, tli, gfi, agfi, aic, bic)
+            return chi_orig_stat, chi_orig_p, chi_b, chi_stat, chi_p, bias_chi, chi_base_stat, chi_base_p, srmr, rmsea, cfi, tli, gfi, agfi, aic, bic, eval_stats
+        else:
+            chi_stat, chi_p, chi_base_stat, chi_base_p, srmr, rmsea, cfi, tli, gfi, agfi, aic, bic = self.GoodnessOfFit(model, base_model, dataframe)
+            eval_stats = self.tableGoodnessOfFit(chi_stat, chi_p, chi_base_stat, chi_base_p, srmr, rmsea, cfi, tli, gfi, agfi, aic, bic)
+            return chi_stat, chi_p, chi_base_stat, chi_base_p, srmr, rmsea, cfi, tli, gfi, agfi, aic, bic, eval_stats
 
 class CFA(ModelEval):
     '''
@@ -216,7 +263,7 @@ class CFA(ModelEval):
     localized area of ill fit statistics
     '''
     
-    def __init__(self, equation, data, robust = False, standardize = False, mimic_lavaan = False, baseline = False, obj = 'WLS', solver = 'L-BFGS-B'):
+    def __init__(self, equation, data, robust = False, bootstrapchi = False, B = 1000, mimic_lavaan = False, baseline = False, obj = 'WLS', solver = 'L-BFGS-B'):
         '''
         Instantiate the class 
     
@@ -239,7 +286,8 @@ class CFA(ModelEval):
         self.equation = equation
         self.data = data
         self.bool_robust = robust
-        self.bool_standardize = standardize
+        self.bool_bootstrapchi = bootstrapchi
+        self.B = B
         self.mimic_lavaan = mimic_lavaan
         self.bool_baseline = baseline
         self.obj = obj
@@ -261,7 +309,7 @@ class CFA(ModelEval):
         est = model.fit(dataframe, obj = self.obj, solver = self.solver)
     
         # Get results
-        res = model.inspect(se_robust = self.bool_robust)
+        res = model.inspect(std_est = True, se_robust = self.bool_robust)
         
         return model, est, res
     
@@ -275,29 +323,20 @@ class CFA(ModelEval):
                                   columns = self.mod_semopy.vars['observed'])
         
         # Get model evaluation stats
-        self.chi_stat, self.chi_p, self.chi_base_stat, self.chi_base_p, self.srmr, self.rmsea, self.cfi, self.tli, self.gfi, self.agfi, self.aic, self.bic, self.eval_stats = self.EvalStats(self.mod_semopy, self.data, False)
+        if self.bool_bootstrapchi:
+            self.chi_orig_stat, self.chi_orig_p, self.chi_b, self.chi_stat, self.chi_p, self.bias_chi, self.chi_base_stat, self.chi_base_p, self.srmr, self.rmsea, self.cfi, self.tli, self.gfi, self.agfi, self.aic, self.bic, self.eval_stats = self.EvalStats(self.mod_semopy, self.data, False)
+        else:
+            self.chi_stat, self.chi_p, self.chi_base_stat, self.chi_base_p, self.srmr, self.rmsea, self.cfi, self.tli, self.gfi, self.agfi, self.aic, self.bic, self.eval_stats = self.EvalStats(self.mod_semopy, self.data, False)
         
         # Illness of fit
         self.std_resid = self.IllnessOfFit()
-        
-        # Get standardized results
-        if self.bool_standardize:
-            ## Standardize data
-            self.data_std = self.standardizeData(self.data)
             
-            ## Get standardized results
-            self.mod_std_semopy, self.est_std_semopy, self.results_std = self.semopyFit(self.data_std)
-        
-        # Get standardized evaluation stats
-            self.chi_stat_std, self.chi_p_std, self.chi_base_stat_std, self.chi_base_p_std, self.srmr_std, self.rmsea_std, self.cfi_std, self.tli_std, self.gfi_std, self.agfi_std, self.aic_std, self.bic_std, self.eval_stats_std = self.EvalStats(self.mod_std_semopy, self.data_std, True)
-        
         return self
 
 #--------------------------------------------
 # Setup Factor model
 #--------------------------------------------
 
-#TODO: Determine which variables to declare 'censored'
 # Model specification
 '''NOTE: We test various model specifications in this script. All are based 
     on theory/previous exploratory factor analyses. Main give aways:
@@ -312,122 +351,79 @@ class CFA(ModelEval):
             high loadings or no high loadings). The severity is only low.
     '''
 
-# Main Model
-formula0 = '''LS =~ cr_as_nonsec + 1*hmda_gse_amount + hmda_priv_amount + cr_ls_income + cr_serv_fees
-              ABS =~ cr_as_sec + 1*hmda_sec_amount + cr_ce_sec + cr_serv_fees + cr_ta_secveh + cr_sec_income
-              CDO =~ cr_cds_purchased + cr_trs_purchased + cr_co_purchased + cr_cdoth_purchased + cr_ta_secveh + cr_sec_income
-              ABCP =~ cr_ta_abcp + cr_sec_income 
+# Main Model (no loan sales)
+formula0a = '''ABS =~ cr_as_rmbs + cr_as_abs + hmda_sec_amount + cr_ce_rmbs + cr_ce_abs + cr_secveh_ta 
+              CDO =~ cr_cds_purchased + cr_trs_purchased + cr_co_purchased + cr_cdoth_purchased + cr_secveh_ta 
+              ABCP =~ cr_abcp_ce + 1*cr_abcp_uc + cr_abcp_ta  
+              
+              DEFINE(latent) ABS CDO ABCP
+              
+              ABS, CDO ~~ ABCP
+              ABS ~~ CDO
+            '''
+            
+formula0b = '''ABS =~ cr_as_rmbs + cr_as_abs + hmda_sec_amount + cr_ce_rmbs + cr_ce_abs + cr_secveh_ta 
+              CDO =~ cr_cds_purchased + cr_trs_purchased + cr_co_purchased + cr_cdoth_purchased + cr_secveh_ta 
+              ABCP =~ cr_abcp_ce + 1*cr_abcp_uc + cr_abcp_ta 
+              GENSEC =~ ABS + CDO + ABCP 
+              
+              DEFINE(latent) ABS CDO ABCP GENSEC
+            '''
+
+
+# Main model with loan sales (to check the connection between ls and sec)
+formula0a_ls = '''LS =~ cr_as_nonsec + hmda_gse_amount + hmda_priv_amount 
+              ABS =~ cr_as_rmbs + cr_as_abs + hmda_sec_amount + cr_ce_rmbs + cr_ce_abs + cr_secveh_ta 
+              CDO =~ cr_cds_purchased + cr_trs_purchased + cr_co_purchased + cr_cdoth_purchased + cr_secveh_ta 
+              ABCP =~ cr_abcp_ce + 1*cr_abcp_uc + cr_abcp_ta  
+              
+              DEFINE(latent) LS ABS CDO ABCP
+              
+              ABS, CDO ~~ ABCP
+              ABS ~~ CDO
+              LS ~~ 0*ABCP
+            '''
+            
+formula0b_ls = '''LS =~ cr_as_nonsec + hmda_gse_amount + hmda_priv_amount 
+              ABS =~ cr_as_rmbs + cr_as_abs + hmda_sec_amount + cr_ce_rmbs + cr_ce_abs + cr_secveh_ta 
+              CDO =~ cr_cds_purchased + cr_trs_purchased + cr_co_purchased + cr_cdoth_purchased + cr_secveh_ta 
+              ABCP =~ cr_abcp_ce + 1*cr_abcp_uc + cr_abcp_ta 
               GENSEC =~ ABS + CDO + ABCP 
               
               DEFINE(latent) LS ABS CDO ABCP GENSEC
               
-              LS ~~ ABS
-              ''' 
+              LS ~~ GENSEC
+            '''
 
 # Alternative Models
-## Alternative multilevel
-formula1 = '''LS =~ cr_as_nonsec + 1*hmda_gse_amount + hmda_priv_amount + cr_ls_income + cr_serv_fees
-              SEC1 =~ cr_as_sec + 1*hmda_sec_amount + cr_ce_sec + cr_serv_fees + cr_ta_secveh + cr_sec_income
-              SEC2 =~ cr_cds_purchased + cr_trs_purchased + cr_co_purchased + cr_cdoth_purchased + cr_ta_secveh + cr_ta_abcp + cr_sec_income + cr_serv_fees
-              GENSEC =~ SEC1 + SEC2
+## 
+formula1a = '''ABS =~ cr_as_rmbs + cr_as_abs + hmda_sec_amount + cr_ce_rmbs + cr_ce_abs + cr_secveh_ta 
+              CDOABCP =~ cr_cds_purchased + cr_trs_purchased + cr_co_purchased + cr_cdoth_purchased + cr_abcp_ce + 1*cr_abcp_uc + cr_abcp_ta + cr_secveh_ta 
               
-              DEFINE(latent) LS SEC1 SEC2 GENSEC
+              DEFINE(latent) ABS CDOABCP
               
-              LS ~~ GENSEC
-              ''' 
-
-## No multilevel
-formula2 = '''# Measurement model
-              LS =~ cr_as_nonsec + hmda_gse_amount + hmda_priv_amount + cr_ls_income + cr_serv_fees
-              ABS =~ cr_as_sec + hmda_sec_amount + cr_ce_sec + cr_serv_fees + cr_ta_secveh + cr_sec_income
-              CDOABCP =~ cr_cds_purchased + cr_trs_purchased + cr_co_purchased + cr_cdoth_purchased + cr_ta_secveh + cr_ta_abcp + cr_sec_income
-              
-              # Latent variables
-              DEFINE(latent) LS ABS CDOABCP 
-              
-              # Correlations
-              LS ~~ ABS
               ABS ~~ CDOABCP
-              ''' 
-
-formula3 = '''# Measurement model
-              LS =~ cr_as_nonsec + hmda_gse_amount + hmda_priv_amount + cr_ls_income + cr_serv_fees
-              ABS =~ cr_as_sec + hmda_sec_amount + cr_ce_sec
-              CDOABCP =~ cr_cds_purchased + cr_trs_purchased + cr_co_purchased + cr_cdoth_purchased + cr_ta_abcp
-              GENSEC =~ cr_sec_income + cr_serv_fees + cr_ta_secveh 
+            '''
+            
+formula1b = '''ABS =~ cr_as_rmbs + cr_as_abs + hmda_sec_amount + cr_ce_rmbs + cr_ce_abs + cr_secveh_ta 
+              CDOABCP =~ cr_cds_purchased + cr_trs_purchased + cr_co_purchased + cr_cdoth_purchased + cr_abcp_ce + 1*cr_abcp_uc + cr_abcp_ta + cr_secveh_ta 
+              GENSEC =~ ABS + CDOABCP 
               
-              # Latent variables
-              DEFINE(latent) LS ABS CDOABCP GENSEC
-              
-              # Correlations
-              LS ~~ ABS
-              ABS ~~ CDOABCP
-              ABS ~~ GENSEC
-              CDOABCP ~~ GENSEC
-              ''' 
-
-## No loan sales
-formula3= ''' SEC1 =~ cr_as_sec + hmda_sec_amount + cr_ce_sec + cr_serv_fees + cr_ta_secveh + cr_sec_income
-              SEC2 =~ cr_cds_purchased + cr_trs_purchased + cr_co_purchased + cr_cdoth_purchased + cr_ta_secveh + cr_ta_abcp + cr_sec_income
-              GENSEC =~ SEC1 + SEC2
-              
-              DEFINE(latent) SEC1 SEC2 GENSEC
-              ''' 
-
-
-
-# formula1 =  '''LS =~ cr_as_nonsec + hmda_priv_amount + cr_ls_income + hmda_gse_amount + cr_serv_fees
-#                GENSEC =~ cr_serv_fees + cr_ta_secveh + cr_ta_vie_other + cr_sec_income 
-#                ABS =~ cr_as_sec + hmda_sec_amount
-#                CDOABCP =~ cr_cds_purchased + cr_trs_purchased + cr_co_purchased + cr_cdoth_purchased + cr_ta_abcp'''
-
-
-# formula2 = '''LS =~ hmda_gse_amount + hmda_priv_amount + cr_ls_income + cr_as_nonsec + cr_serv_fees
-#               SEC1 =~ cr_as_sec + hmda_sec_amount + cr_serv_fees + cr_ta_secveh + cr_sec_income
-#               SEC2 =~ cr_cd_net + cr_ta_abcp + cr_ta_secveh + cr_sec_income
-              
-#               LS ~~ SEC1
-#               LS ~~ SEC2
-#               SEC1 ~~ SEC2''' 
-             
-# formula3 = '''LS =~ hmda_gse_amount + hmda_priv_amount + cr_ls_income + cr_as_nonsec + cr_serv_fees
-#               SECINC =~ cr_serv_fees + cr_sec_income
-#               SECASSETS =~ cr_as_sec + hmda_sec_amount + cr_cd_net + cr_ta_abcp + cr_ta_secveh
-              
-#               LS ~~ SECINC
-#               LS ~~ SECASSETS
-#               SECINC ~~ SECASSETS
-#           '''
-          
-# formula4 = '''TA =~ cr_ta_abcp + cr_ta_secveh + cr_ta_vie_other
-#               INC =~ cr_serv_fees + cr_sec_income + cr_ls_income
-#               OTHER =~ hmda_gse_amount + hmda_priv_amount + cr_as_nonsec + cr_as_sec + hmda_sec_amount + cr_cd_net
-          
-#               TA ~~ INC
-#               TA ~~ OTHER
-#               INC ~~ OTHER'''
-              
-# formula5 = '''LS =~ hmda_gse_amount + hmda_priv_amount + cr_ls_income + cr_as_nonsec + cr_serv_fees
-#               ABS =~ cr_as_sec + hmda_sec_amount + cr_ta_secveh + cr_sec_income  + cr_serv_fees
-#               CDO =~ cr_cd_net + cr_ta_secveh + cr_sec_income  + cr_serv_fees
-              
-#               LS ~~ ABS
-#               LS ~~ CDO
-#               ABS ~~ CDO
-#            '''
-
+              DEFINE(latent) ABS CDOABCP GENSEC
+            '''
+# NOTE 1b uses Cholesky: do not use
 #--------------------------------------------
 # Run CFA models
 #--------------------------------------------
 
 # Set procedure
-def CFAWrapper(formula, obj, filename, robust = False, solver = 'SLSQP'):
+def CFAWrapper(formula, obj, filename, robust = False, bootstrapchi = False, B = 1000, solver = 'SLSQP'):
     ### Fit model
-    res = CFA(formula, df_log, obj = obj, robust = robust, solver = solver).fit()
+    res = CFA(formula, df_log, obj = obj, robust = robust, bootstrapchi = bootstrapchi, B = B, solver = solver).fit()
     
     ### Get results
     #### Sample covariance matrix 
-    cov = df_sec[res.mod_semopy.vars['observed']].cov()
+    cov = df_log[res.mod_semopy.vars['observed']].cov()
     
     #### Tobit covariance/correlation matrix (polychoric/polyserial)
     poly_cov = pd.DataFrame(res.mod_semopy.mx_cov, index = res.mod_semopy.vars['observed'], columns = res.mod_semopy.vars['observed'])
@@ -458,14 +454,110 @@ def CFAWrapper(formula, obj, filename, robust = False, solver = 'SLSQP'):
     semplot(res.mod_semopy, r'Figures\CFA_path_diagrams\{}.PNG'.format(filename),  plot_covs = True, show = False)
     
 # Loop over all formulas
-## Waller/Muthen (1991) Generic Tobit Factor Analysis (GTFA) procedure
-## TODO
-
 ## ADF procedure
-formulas = [formula0, formula1, formula3]
-filenames = ['formula0', 'formula1']
+formulas = [formula0a, formula0b, formula0a_ls, formula0b_ls, formula1a]
+filenames = ['formula0a', 'formula0b', 'formula0a_ls', 'formula0b_ls', 'formula1a']
 
 for formula, filename in zip(formulas,filenames):
-    CFAWrapper(formula, 'WLS', filename, robust = False, solver = 'SLSQP')
+    CFAWrapper(formula, 'WLS', filename, robust = False, bootstrapchi = True, B = 1000, solver = 'SLSQP')
 
-res = CFA(formula0, df_log, obj = 'WLS', robust = False, solver = 'SLSQP').fit()
+filenames_mlr = ['formula0a_mlr', 'formula0b_mlr', 'formula0a_ls_mlr', 'formula0b_ls_mlr', 'formula1a_mlr']
+for formula, filename in zip(formulas,filenames_mlr):
+    CFAWrapper(formula, 'MLW', filename, robust = True, bootstrapchi = False, solver = 'SLSQP')
+
+#res = CFA(formula0a, df_log, obj = 'MLW', robust = True, bootstrapchi = False, B = 1000, solver = 'SLSQP').fit()
+
+#-----------------------------------------------------
+def u(i, n):
+    """unit vector
+    """
+    u_ = np.zeros(n, np.int64)
+    u_[i] = 1
+    return u_
+
+def E(i, j, nr, nc):
+    """create unit matrix with 1 in (i,j)th element and zero otherwise
+    """
+    x = np.zeros((nr, nc), np.int64)
+    x[i, j] = 1
+    return x
+
+def vec(x):
+    """ravel matrix in fortran order (stacking columns)
+    """
+    return np.ravel(x, order='F')
+
+def L(n):
+    """elimination matrix
+    symmetric case
+    """
+    # they use 1-based indexing
+    # k = sum(u(int(round((j - 1)*n + i - 0.5* j*(j - 1) -1)), n*(n+1)//2)[:, None].dot(vec(E(i, j, n, n))[None, :])
+    k = sum(u(int(np.trunc((j)*n + i - 0.5* (j + 1)*(j))), n*(n+1)//2)[:, None].dot(vec(E(i, j, n, n))[None, :])
+            for i in range(n) for j in range(i+1))
+    return k
+
+def K(n):
+    """selection matrix
+    symmetric case only
+    """
+    k = sum(np.kron(E(i, j, n, n), E(i, j, n, n).T)
+            for i in range(n) for j in range(n))
+    return k
+
+def Dup(n):
+    """duplication matrix
+    """
+    l = L(n)
+    ltl = l.T.dot(l)
+    k = K(n)
+    d = l.T + k.dot(l.T) - ltl.dot(k).dot(l.T)
+    return d
+
+from numdifftools import Jacobian
+
+
+sigma, (m,c) = res.mod_semopy.calc_sigma()
+sigma_inv = np.linalg.inv(sigma)
+d = Dup(sigma.shape[0])
+Wc = .5 * d.T @ np.kron(sigma_inv,sigma_inv) @ d
+
+
+Uc = Wc - Wc @ jac
+info, info_inv = res.mod_semopy.calc_fim(inverse = True)
+
+d_test = Dup(cov_log.shape[0])
+
+#----------------
+fim, fim_inv = res.mod_semopy.calc_fim(inverse = True)
+
+hess = Hessian(fun)(res.mod_semopy.param_vals)
+mx_inf = np.linalg.pinv(hess)
+g = sum(np.outer(g,g) for g in res.mod_semopy.grad_se_g(res.mod_semopy.param_vals))
+mx_inf = mx_inf @ g @ mx_inf
+
+
+test = res.mod_semopy.grad_se_g(res.mod_semopy.param_vals)
+
+
+
+
+
+
+
+
+
+
+sigma, (m,c) = res.mod_semopy.calc_sigma()
+sigma_inv = np.linalg.inv(sigma)
+mx_i = np.identity(sigma.shape[0])
+data = res.mod_semopy.mx_data.copy()
+data -= data.mean(axis=0)
+for i in range(res.mod_semopy.mx_data.shape[0]):
+    x = data[i, np.newaxis]
+
+t = sigma_inv @ (mx_i -  x.T @ x @ sigma_inv)
+
+sigma_grad = res.mod_semopy.calc_sigma_grad(m,c)
+
+test = np.einsum('ij,ji->', t, sigma_grad[0])

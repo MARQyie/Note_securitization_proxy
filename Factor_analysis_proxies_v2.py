@@ -89,8 +89,8 @@ def heatmap(matrix, pvals, file, annot = True):
     
 # Get correlation matrix
 from scipy.stats import spearmanr
-corr = df_standard[vars_tot].corr(method = 'spearman')
-corr_pval = spearmanr(df_standard[vars_tot])[1] 
+corr = df_log[vars_tot].corr(method = 'pearson')
+corr_pval = spearmanr(df_log[vars_tot])[1] 
 
 # Label columns and index
 labels = ['HDMA GSE','HMDA Private','HMDA Sec.',\
@@ -106,7 +106,7 @@ corr.index = labels
 corr.columns = labels
 
 ## PLot
-heatmap(corr, corr_pval, 'Corr_standardized_fa.png')
+heatmap(corr, corr_pval, 'Corr_fa.png')
 
 #--------------------------------------------
 # Check if multivariate normal distribution 
@@ -303,3 +303,35 @@ fa_om_loadings.to_excel(writer, sheet_name='oblimin')
 fa_qmo_loadings.to_excel(writer, sheet_name='quartimin')
 
 writer.save()
+
+#--------------------------------------------
+# Three factor Promax 
+#--------------------------------------------
+
+fa_pm3 = FactorAnalyzer(rotation = 'promax', n_factors = 3, method = 'principal')
+fa_pm3.fit(df_standard[vars_tot])
+
+## Get the factor loadings 
+fa_pm3_loadings = pd.DataFrame(fa_pm3.loadings_,\
+                           columns = range(3),\
+                           index = vars_tot)
+    
+'''NOTE 
+    
+    Based on the 5 factor EFA, we check a 3 factor model to see what changes.
+
+    Badly behaving indicators (low loadings)            : hmda_sec_amount, 
+        cr_ls_income, cr_cdoth_purchased, cr_as_rmbs, cr_ce_abs, cr_as_sbo, 
+        cr_secveh_ta
+    Badly behaving indicators (multiple high loadings)  : NONE
+    Badly identified factors (only 1--2 salient loading) : NONE
+        
+    Interpretation Factors:
+        F0: CDO/ABCP Securitization
+        F1: ABS Securitization
+        F2: Loan Sales
+        
+    CONCLUSION: Interpretation of the first three factors barely change, more
+    variables are badly behaving.
+    '''
+

@@ -1,6 +1,116 @@
 #--------------------------------------------
 # Make functions for semopy
 #--------------------------------------------
+# Note, these function allow a custom w during WLS
+def fit(self, data=None, cov=None, obj='MLW', solver='SLSQP', groups=None,
+            clean_slate=False, regularization=None, n_samples=None, custom_w = None **kwargs):
+        """
+        Fit model to data.
+
+        Parameters
+        ----------
+        data : pd.DataFrame, optional
+            Data with columns as variables. The default is None.
+        cov : pd.DataFrame, optional
+            Pre-computed covariance/correlation matrix. The default is None.
+        obj : str, optional
+            Objective function to minimize. Possible values are 'MLW', 'FIML',
+            'ULS', 'GLS', 'WLS', 'DWLS'. The default is 'MLW'.
+        solver : str, optional
+            Optimizaiton method. Currently scipy-only methods are available.
+            The default is 'SLSQP'.
+        groups : list, optional
+            Groups of size > 1 to center across. The default is None.
+        clean_slate : bool, optional
+            If False, successive fits will be performed with previous results
+            as starting values. If True, parameter vector is reset each time
+            prior to optimization. The default is False.
+        regularization
+            Special structure as returend by create_regularization function.
+            If not None, then a regularization will be applied to a certain
+            parameters in the model. The default is None.
+        n_samples : int, optional
+            Number of samples in data. Used only if data is None and cov is
+            provided for Fisher Information Matrix calculation. The default is
+            None.
+
+        Raises
+        ------
+        Exception
+            Rises when attempting to use FIML in absence of full data.
+
+        Returns
+        -------
+        SolverResult
+            Information on optimization process.
+
+        """
+        self.load(data=data, cov=cov, groups=groups,
+                  clean_slate=clean_slate, n_samples=n_samples)
+        if obj == 'FIML':
+            if not hasattr(self, 'mx_data'):
+                raise Exception('Full data must be supplied for FIML')
+            self.prepare_fiml()
+        elif obj in ('WLS', 'DWLS'):
+            if (not hasattr(self, 'last_result')) or \
+                (self.last_result.name_obj != obj):
+                    self.prepare_wls(obj, custom_w)
+        fun, grad = self.get_objective(obj, regularization=regularization)
+        solver = Solver(solver, fun, grad, self.param_vals,
+                        constrs=self.constraints,
+                        bounds=self.get_bounds(), **kwargs)
+        res = solver.solve()
+        res.name_obj = obj
+        self.param_vals = res.x
+        self.update_matrices(res.x)
+        self.last_result = res
+        return res
+
+def prepare_wls(self, obj: str, custom_w=None):
+        """
+        Prepare data structures for efficient WLS/DWLS estimation.
+
+        Parameters
+        ----------
+        obj : str
+            Either 'WLS' or 'DWLS'.
+        custom_w : np.ndarray, optional
+            Optional custom weight matrix. The default is None.
+
+        Returns
+        -------
+        None.
+
+        """
+        
+		if custom_w is not None:
+			w = custom_w
+		else:
+			data = self.mx_data - self.mx_data.mean(axis=0)
+			products = list()
+			for i in range(data.shape[1]):
+				for j in range(i, data.shape[1]):
+					products.append(data[:, i] * data[:, j])
+			products = np.array(products)
+			w = np.cov(products, bias=True)
+		
+		if obj == 'DWLS':
+			self.mx_w_inv = np.array([1 / d for d in w.diagonal()])
+		else:
+			try:
+				self.mx_w_inv = np.linalg.inv(w)
+			except np.linalg.LinAlgError:
+				logging.warning("Weight matrix could not be inverted. NearPD"
+								" estimate will be used instead.")
+				w = cov_nearest(w, threshold=1e-2)
+				self.mx_w_inv = np.linalg.pinv(w)
+		self.mx_w = w
+		self.inds_triu_sigma = np.triu_indices_from(self.mx_cov)
+		self.mx_vech_s = self.mx_cov[self.inds_triu_sigma]
+
+#--------------------------------------------
+# OLD
+#--------------------------------------------
 
 # New functions
 # MODEL CLASS

@@ -44,8 +44,8 @@ df = pd.read_csv('Data\df_sec_note.csv', index_col = 0)
 #df['cr_cd_net'] = df.cr_cd_purchased - df.cr_cd_sold
 
 # set variable names
-vars_tot = [var for var in df.columns if var not in ['IDRSSD','date','cr_cd_purchased','cr_cd_sold', 'cr_cds_sold', 'cr_trs_sold', 'cr_co_sold', 'cr_cdoth_sold', 'cr_ta_vie_other', 'cr_as_sec', 'cr_ce_sec']]
-
+vars_tot = [var for var in df.columns if var not in ['IDRSSD','date','cr_cd_purchased','cr_cd_sold', 'cr_cds_sold', 'cr_trs_sold', 'cr_co_sold', 'cr_cdoth_sold', 'cr_ta_vie_other', 'cr_as_sec', 'cr_ce_sec', 'cr_serv_fees', 'cr_sec_income', 'cr_ls_income','ta']]
+vars_tot_nols = [var for var in vars_tot if var not in ['hmda_gse_amount', 'hmda_priv_amount', 'cr_as_nonsec', 'cr_as_sbo']]
 # Subset data to only needed variables
 df_sub = df[vars_tot]
 
@@ -92,21 +92,34 @@ from scipy.stats import spearmanr
 corr = df_log[vars_tot].corr(method = 'pearson')
 corr_pval = spearmanr(df_log[vars_tot])[1] 
 
+corr_nols = df_log[vars_tot_nols].corr(method = 'pearson')
+corr_nols_pval = spearmanr(df_log[vars_tot_nols])[1] 
+
 # Label columns and index
 labels = ['HDMA GSE','HMDA Private','HMDA Sec.',\
-          'Serv. Fees', 'Sec. Income','LS Income',\
           'CDS Pur.', 'TRS Pur.', 'CO Pur.',\
           'Other CDs Pur.', 'Assets Sold and Sec. (RMBS)',\
           'Assets Sold and Sec. (ABS)', 'Asset Sold and Not Sec.',\
           'Cred. Exp. Oth. (RMBS)', 'Cred. Exp. Oth. (ABS)', 'Asset Sold (SBO)',\
           'Cred. Exp. ABCP', 'Unused Comm. ABCP', 'TA Sec. Vehicles', \
           'TA ABCP Conduits', 'Comm. Paper ABCP']
+labels_nols = ['HMDA Sec.',\
+          'CDS Pur.', 'TRS Pur.', 'CO Pur.',\
+          'Other CDs Pur.', 'Assets Sold and Sec. (RMBS)',\
+          'Assets Sold and Sec. (ABS)',
+          'Cred. Exp. Oth. (RMBS)', 'Cred. Exp. Oth. (ABS)', 
+          'Cred. Exp. ABCP', 'Unused Comm. ABCP', 'TA Sec. Vehicles', \
+          'TA ABCP Conduits', 'Comm. Paper ABCP']
 
 corr.index = labels
 corr.columns = labels
 
+corr_nols.index = labels_nols
+corr_nols.columns = labels_nols
+
 ## PLot
 heatmap(corr, corr_pval, 'Corr_fa.png')
+heatmap(corr_nols, corr_nols_pval, 'Corr_nols_fa.png')
 
 #--------------------------------------------
 # Check if multivariate normal distribution 
@@ -142,9 +155,12 @@ for i in range(len(vars_tot)):
 
 # Bartlett's test. H0: equal variance
 bartlett_chi, bartlett_p = calculate_bartlett_sphericity(df_standard[vars_tot]) # p = 0.0
+bartlett_chi_nols, bartlett_p_nols = calculate_bartlett_sphericity(df_standard[vars_tot_nols]) # p = 0.0
+
 
 # Kaiser-Meyer-Olkin (KMO) test. Measures data suitability; should be between 0 and 1, but above 0.5
-kmo_all, kmo_model = calculate_kmo(df_standard[vars_tot]) #kmo_model = 0.86
+kmo_all, kmo_model = calculate_kmo(df_standard[vars_tot]) #kmo_model = 0.87
+kmo_all_nols, kmo_model_nols = calculate_kmo(df_standard[vars_tot_nols]) #kmo_model = 0.88
 
 '''Note: looks good '''
 
@@ -163,15 +179,27 @@ fa = FactorAnalyzer(rotation = None, method = 'principal')
 fa.fit(df_standard[vars_tot])
 ev, v = fa.get_eigenvalues()
 
+fa_nols = FactorAnalyzer(rotation = None, method = 'principal')
+fa_nols.fit(df_standard[vars_tot_nols])
+ev_nols, v_nols = fa_nols.get_eigenvalues()
+
 # Perform a parallel analysis
 list_ev_rand = []
+list_ev_rand_nols = []
 
 np.random.seed(1)
 for i in range(100):
     df_rand = pd.DataFrame(np.random.rand(*df_standard[vars_tot].shape))
-    fa_rand = FactorAnalyzer(rotation = None).fit(df_rand)
+    df_rand_nols = pd.DataFrame(np.random.rand(*df_standard[vars_tot_nols].shape))
+    
+    fa_rand = FactorAnalyzer(rotation = None, method = 'principal').fit(df_rand)
+    fa_rand_nols = FactorAnalyzer(rotation = None, method = 'principal').fit(df_rand_nols)
+    
     ev_rand, _ = fa_rand.get_eigenvalues()
+    ev_rand_nols, _ = fa_rand_nols.get_eigenvalues()
+    
     list_ev_rand.append(ev_rand)
+    list_ev_rand_nols.append(ev_rand_nols)
 
 fig, ax = plt.subplots(figsize=(15,9)) 
 ax.set(ylabel='Eigenvalue', xlabel = 'Factor')
@@ -182,14 +210,27 @@ plt.tight_layout()
 
 fig.savefig('Figures/Dimension_reduction/FA_parallel.png')
 
-'''NOTE: First 5 factors have an eigen value greater than 1.
+fig, ax = plt.subplots(figsize=(15,9)) 
+ax.set(ylabel='Eigenvalue', xlabel = 'Factor')
+ax.plot(range(1, df_standard[vars_tot_nols].shape[1] + 1), ev_nols, marker = 'o', label = 'Factor')
+ax.plot(range(1, df_standard[vars_tot_nols].shape[1] + 1), np.mean(list_ev_rand_nols,axis = 0), color = 'black', linestyle = '--', label = 'Parallel Analysis')
+ax.legend()
+plt.tight_layout()
+
+fig.savefig('Figures/Dimension_reduction/FA_parallel_nols.png')
+
+'''NOTE: With LS: First 5 factors have an eigen value greater than 1.
     Parallel analysis: ev_parallel is slightly above ev_efa: 
         N factors is 4
     Scree plot: 5 factors
     
-    Conclusion: 5 factors is appropriate'''
+    Conclusion: 5 factors is appropriate
+    
+    Without LS: 3 factors are appropriate'''
 #--------------------------------------------
-# Factor rotation
+# Factor rotation all variables
+# Note: No orthogonal rotations, since the orth. assumption is unrealistic
+# See Brown (2015)
 #--------------------------------------------
     
 # Get factor estimates
@@ -201,32 +242,7 @@ fa_loadings = pd.DataFrame(fa.loadings_,\
                            columns = range(5),\
                            index = vars_tot)
 
-fa_loadings.to_csv('Results/fa_loadings_norotation_sec.csv')
-
-#--------------------------------------------
-# Orthogonal rotations
-
-# Varimax (maximizes the sum of the variance of squared loadings)
-fa_vm = FactorAnalyzer(rotation = 'varimax', n_factors = 5, method = 'principal')
-fa_vm.fit(df_standard[vars_tot])
-
-## Get the factor loadings 
-fa_vm_loadings = pd.DataFrame(fa_vm.loadings_,\
-                           columns = range(5),\
-                           index = vars_tot)
-
-fa_vm_loadings.to_csv('Results/fa_loadings_varimax_sec.csv')
-
-# Quartimax (minimizes the number of factors needed to explain each variable.)
-fa_qm = FactorAnalyzer(rotation = 'quartimax', n_factors = 5, method = 'principal')
-fa_qm.fit(df_standard[vars_tot])
-
-## Get the factor loadings 
-fa_qm_loadings = pd.DataFrame(fa_qm.loadings_,\
-                           columns = range(5),\
-                           index = vars_tot)
-
-fa_qm_loadings.to_csv('Results/fa_loadings_quartimax_sec.csv')
+fa_loadings.to_csv('Results/fa_loadings_norotation.csv')
 
 #--------------------------------------------
 # Oblique rotations
@@ -240,7 +256,7 @@ fa_pm_loadings = pd.DataFrame(fa_pm.loadings_,\
                            columns = range(5),\
                            index = vars_tot)
 
-fa_pm_loadings.to_csv('Results/fa_loadings_promax_sec.csv')
+fa_pm_loadings.to_csv('Results/fa_loadings_promax.csv')
 
 # Oblimin
 fa_om = FactorAnalyzer(rotation = 'oblimin', n_factors = 5, method = 'principal')
@@ -251,7 +267,7 @@ fa_om_loadings = pd.DataFrame(fa_om.loadings_,\
                            columns = range(5),\
                            index = vars_tot)
 
-fa_om_loadings.to_csv('Results/fa_loadings_oblimin_sec.csv')
+fa_om_loadings.to_csv('Results/fa_loadings_oblimin.csv')
 
 # Quartimin
 fa_qmo = FactorAnalyzer(rotation = 'quartimin', n_factors = 5, method = 'principal')
@@ -262,7 +278,7 @@ fa_qmo_loadings = pd.DataFrame(fa_qmo.loadings_,\
                            columns = range(5),\
                            index = vars_tot)
 
-fa_qmo_loadings.to_csv('Results/fa_loadings_quartimin_sec.csv')
+fa_qmo_loadings.to_csv('Results/fa_loadings_quartimin.csv')
 
 '''NOTE 
     Cutoff: x > .4 (cf. Brown, 2015: CFA for Applied Research p. 27).
@@ -291,13 +307,11 @@ fa_qmo_loadings.to_csv('Results/fa_loadings_quartimin_sec.csv')
 
 #--------------------------------------------
 # Save loadings to excel
-#--------------------------------------------
+
 
 writer = pd.ExcelWriter('Results/fa_loadings_all.xlsx', engine='xlsxwriter')
 
 fa_loadings.to_excel(writer, sheet_name='no_rotation')
-fa_vm_loadings.to_excel(writer, sheet_name='varimax')
-fa_qm_loadings.to_excel(writer, sheet_name='quartimax')
 fa_pm_loadings.to_excel(writer, sheet_name='promax')
 fa_om_loadings.to_excel(writer, sheet_name='oblimin')
 fa_qmo_loadings.to_excel(writer, sheet_name='quartimin')
@@ -305,33 +319,82 @@ fa_qmo_loadings.to_excel(writer, sheet_name='quartimin')
 writer.save()
 
 #--------------------------------------------
-# Three factor Promax 
+# Factor rotation No loan sales
+# Note: No orthogonal rotations, since the orth. assumption is unrealistic
+# See Brown (2015)
 #--------------------------------------------
+    
+# Get factor estimates
+fa = FactorAnalyzer(rotation = None, n_factors = 3, method = 'principal')
+fa.fit(df_standard[vars_tot_nols])
 
-fa_pm3 = FactorAnalyzer(rotation = 'promax', n_factors = 3, method = 'principal')
-fa_pm3.fit(df_standard[vars_tot])
+# Get the non-rotated factor loadings
+fa_loadings = pd.DataFrame(fa.loadings_,\
+                           columns = range(3),\
+                           index = vars_tot_nols)
+
+fa_loadings.to_csv('Results/fa_loadings_norotation_nols.csv')
+
+#--------------------------------------------
+# Oblique rotations
+
+# Promax 
+fa_pm = FactorAnalyzer(rotation = 'promax', n_factors = 3, method = 'principal')
+fa_pm.fit(df_standard[vars_tot_nols])
 
 ## Get the factor loadings 
-fa_pm3_loadings = pd.DataFrame(fa_pm3.loadings_,\
+fa_pm_loadings = pd.DataFrame(fa_pm.loadings_,\
                            columns = range(3),\
-                           index = vars_tot)
-    
-'''NOTE 
-    
-    Based on the 5 factor EFA, we check a 3 factor model to see what changes.
+                           index = vars_tot_nols)
 
-    Badly behaving indicators (low loadings)            : hmda_sec_amount, 
-        cr_ls_income, cr_cdoth_purchased, cr_as_rmbs, cr_ce_abs, cr_as_sbo, 
-        cr_secveh_ta
-    Badly behaving indicators (multiple high loadings)  : NONE
-    Badly identified factors (only 1--2 salient loading) : NONE
+fa_pm_loadings.to_csv('Results/fa_loadings_promax_nols.csv')
+
+# Oblimin
+fa_om = FactorAnalyzer(rotation = 'oblimin', n_factors = 3, method = 'principal')
+fa_om.fit(df_standard[vars_tot_nols])
+
+## Get the factor loadings 
+fa_om_loadings = pd.DataFrame(fa_om.loadings_,\
+                           columns = range(3),\
+                           index = vars_tot_nols)
+
+fa_om_loadings.to_csv('Results/fa_loadings_oblimin_nols.csv')
+
+# Quartimin
+fa_qmo = FactorAnalyzer(rotation = 'quartimin', n_factors = 3, method = 'principal')
+fa_qmo.fit(df_standard[vars_tot_nols])
+
+## Get the factor loadings 
+fa_qmo_loadings = pd.DataFrame(fa_qmo.loadings_,\
+                           columns = range(3),\
+                           index = vars_tot_nols)
+
+fa_qmo_loadings.to_csv('Results/fa_loadings_quartimin_nols.csv')
+
+'''NOTE 
+    Cutoff: x > .4 (cf. Brown, 2015: CFA for Applied Research p. 27).
+    We base ourselfs on the promax rotation, other oblique rotations might
+    lead to other results.
+        
+    Badly behaving indicators (low loadings)            : cr_secveh_ta
+    Badly behaving indicators (multiple high loadings)  : cr_cds_purchased
+    Badly identified factors (only 1--2 salient loading) : F2
         
     Interpretation Factors:
-        F0: CDO/ABCP Securitization
-        F1: ABS Securitization
-        F2: Loan Sales
-        
-    CONCLUSION: Interpretation of the first three factors barely change, more
-    variables are badly behaving.
+        F0: CDO/ABCP securitization
+        F1: ABS securitization
+        F2: HMDA RMBS securitization 
     '''
+
+#--------------------------------------------
+# Save loadings to excel
+
+writer = pd.ExcelWriter('Results/fa_loadings_all_nols.xlsx', engine='xlsxwriter')
+
+fa_loadings.to_excel(writer, sheet_name='no_rotation')
+fa_pm_loadings.to_excel(writer, sheet_name='promax')
+fa_om_loadings.to_excel(writer, sheet_name='oblimin')
+fa_qmo_loadings.to_excel(writer, sheet_name='quartimin')
+
+writer.save()
 

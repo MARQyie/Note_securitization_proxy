@@ -44,7 +44,7 @@ os.environ["PATH"] += os.pathsep + 'C:/Program Files/Graphviz/bin'
 #--------------------------------------------
 
 # Load data
-df = pd.read_csv('Data\df_sec_note.csv', index_col = 0, dtype = np.float64)
+df = pd.read_csv('Data\df_sec_note_OLD.csv', index_col = 0, dtype = np.float64)
 
 # Add net credit derivatives
 ## Note: CD purchased and sold are highly colinear. For that reason we calculate
@@ -57,7 +57,11 @@ df = df[df.columns.sort_values()]
 
 # set variable names
 # Variable names
-vars_tot = [var for var in df.columns if var not in ['IDRSSD','date','cr_cd_purchased','cr_cd_sold', 'cr_cds_sold', 'cr_trs_sold', 'cr_co_sold', 'cr_cdoth_sold', 'cr_ta_vie_other', 'cr_as_sec', 'cr_ce_sec']]
+vars_tot = [var for var in df.columns if var not in ['IDRSSD','date','cr_cd_purchased','cr_cd_sold', 'cr_cds_sold', 'cr_trs_sold', 'cr_co_sold', 'cr_cdoth_sold', 'cr_ta_vie_other', 'cr_as_sec', 'cr_ce_sec','ta']]
+vars_tot_nols = [var for var in vars_tot if var not in ['hmda_gse_amount', 'hmda_priv_amount', 'cr_as_nonsec', 'cr_as_sbo']]
+
+# Scale to total assets
+#df = df[vars_tot].div(df.ta, axis = 0)
 
 # Take logs of the data
 df_log = np.log(df[vars_tot] - df[vars_tot].min() + 1) 
@@ -65,7 +69,7 @@ df_log = np.log(df[vars_tot] - df[vars_tot].min() + 1)
 # Use power transformation to force normality on the data
 #from sklearn.preprocessing import PowerTransformer
 #pt = PowerTransformer(method = 'yeo-johnson', standardize = False)
-#df_power = pd.DataFrame(pt.fit_transform(df_sec), columns = vars_tot)
+#df_power = pd.DataFrame(pt.fit_transform(df[vars_tot] + 1), columns = vars_tot)
 
 # Check definiteness of the var-cov matrix
 cov_log = df_log[vars_tot].cov()
@@ -324,9 +328,9 @@ class CFA(ModelEval):
         
         # Get model evaluation stats
         if self.bool_bootstrapchi:
-            self.chi_orig_stat, self.chi_orig_p, self.chi_b, self.chi_stat, self.chi_p, self.bias_chi, self.chi_base_stat, self.chi_base_p, self.srmr, self.rmsea, self.cfi, self.tli, self.gfi, self.agfi, self.aic, self.bic, self.eval_stats = self.EvalStats(self.mod_semopy, self.data, False)
+            self.chi_orig_stat, self.chi_orig_p, self.chi_b, self.chi_stat, self.chi_p, self.bias_chi, self.chi_base_stat, self.chi_base_p, self.srmr, self.rmsea, self.cfi, self.tli, self.gfi, self.agfi, self.aic, self.bic, self.eval_stats = self.EvalStats(self.mod_semopy, self.data)
         else:
-            self.chi_stat, self.chi_p, self.chi_base_stat, self.chi_base_p, self.srmr, self.rmsea, self.cfi, self.tli, self.gfi, self.agfi, self.aic, self.bic, self.eval_stats = self.EvalStats(self.mod_semopy, self.data, False)
+            self.chi_stat, self.chi_p, self.chi_base_stat, self.chi_base_p, self.srmr, self.rmsea, self.cfi, self.tli, self.gfi, self.agfi, self.aic, self.bic, self.eval_stats = self.EvalStats(self.mod_semopy, self.data)
         
         # Illness of fit
         self.std_resid = self.IllnessOfFit()
@@ -352,14 +356,25 @@ class CFA(ModelEval):
     '''
 
 # Main Model (no loan sales)
-formula0a = '''ABS =~ cr_as_rmbs + cr_as_abs + hmda_sec_amount + cr_ce_rmbs + cr_ce_abs + cr_secveh_ta 
-              CDO =~ cr_cds_purchased + cr_trs_purchased + cr_co_purchased + cr_cdoth_purchased + cr_secveh_ta 
-              ABCP =~ cr_abcp_ce + 1*cr_abcp_uc + cr_abcp_ta  
-              
-              DEFINE(latent) ABS CDO ABCP
-              
-              ABS, CDO ~~ ABCP
+formula0a = '''LS =~ cr_as_nsres + cr_as_nsoth + hmda_gse_amount + hmda_priv_amount + cr_ls_income 
+              ABS =~ cr_as_rmbs + cr_as_abs + hmda_sec_amount + cr_sec_income
+              CDO =~ cr_cds_purchased + cr_trs_purchased + cr_co_purchased + cr_sec_income
+              ABCP =~ cr_abcp_uc_own + cr_abcp_ce_own  + cr_sec_income
+    
+              hmda_gse_amount ~~ hmda_priv_amount
+              hmda_sec_amount ~~ hmda_priv_amount
+              hmda_gse_amount ~~ hmda_sec_amount
+              hmda_gse_amount ~~ cr_as_nsres
+              hmda_priv_amount ~~ cr_as_nsres
+              hmda_sec_amount ~~ cr_as_rmbs
+    
+              LS ~~ ABS
+              LS ~~ CDO
               ABS ~~ CDO
+              ABS ~~ ABCP
+              CDO ~~ ABCP
+              
+              DEFINE(latent) ABS CDO LS
             '''
             
 formula0b = '''ABS =~ cr_as_rmbs + cr_as_abs + hmda_sec_amount + cr_ce_rmbs + cr_ce_abs + cr_secveh_ta 
@@ -373,8 +388,8 @@ formula0b = '''ABS =~ cr_as_rmbs + cr_as_abs + hmda_sec_amount + cr_ce_rmbs + cr
 
 # Main model with loan sales (to check the connection between ls and sec)
 formula0a_ls = '''LS =~ cr_as_nonsec + hmda_gse_amount + hmda_priv_amount 
-              ABS =~ cr_as_rmbs + cr_as_abs + hmda_sec_amount + cr_ce_rmbs + cr_ce_abs + cr_secveh_ta 
-              CDO =~ cr_cds_purchased + cr_trs_purchased + cr_co_purchased + cr_cdoth_purchased + cr_secveh_ta 
+              ABS =~ cr_as_rmbs + cr_as_abs + hmda_sec_amount + cr_ce_rmbs + cr_ce_abs
+              CDO =~ cr_cds_purchased + cr_trs_purchased + cr_co_purchased + cr_cdoth_purchased 
               ABCP =~ cr_abcp_ce + 1*cr_abcp_uc + cr_abcp_ta  
               
               DEFINE(latent) LS ABS CDO ABCP
@@ -382,11 +397,11 @@ formula0a_ls = '''LS =~ cr_as_nonsec + hmda_gse_amount + hmda_priv_amount
               ABS, CDO ~~ ABCP
               ABS ~~ CDO
               LS ~~ 0*ABCP
-            '''
+              '''
             
 formula0b_ls = '''LS =~ cr_as_nonsec + hmda_gse_amount + hmda_priv_amount 
-              ABS =~ cr_as_rmbs + cr_as_abs + hmda_sec_amount + cr_ce_rmbs + cr_ce_abs + cr_secveh_ta 
-              CDO =~ cr_cds_purchased + cr_trs_purchased + cr_co_purchased + cr_cdoth_purchased + cr_secveh_ta 
+              ABS =~ cr_as_rmbs + cr_as_abs + hmda_sec_amount + cr_ce_rmbs + cr_ce_abs 
+              CDO =~ cr_cds_purchased + cr_trs_purchased + cr_co_purchased + cr_cdoth_purchased 
               ABCP =~ cr_abcp_ce + 1*cr_abcp_uc + cr_abcp_ta 
               GENSEC =~ ABS + CDO + ABCP 
               
@@ -466,98 +481,4 @@ for formula, filename in zip(formulas,filenames_mlr):
     CFAWrapper(formula, 'MLW', filename, robust = True, bootstrapchi = False, solver = 'SLSQP')
 
 #res = CFA(formula0a, df_log, obj = 'MLW', robust = True, bootstrapchi = False, B = 1000, solver = 'SLSQP').fit()
-
-#-----------------------------------------------------
-def u(i, n):
-    """unit vector
-    """
-    u_ = np.zeros(n, np.int64)
-    u_[i] = 1
-    return u_
-
-def E(i, j, nr, nc):
-    """create unit matrix with 1 in (i,j)th element and zero otherwise
-    """
-    x = np.zeros((nr, nc), np.int64)
-    x[i, j] = 1
-    return x
-
-def vec(x):
-    """ravel matrix in fortran order (stacking columns)
-    """
-    return np.ravel(x, order='F')
-
-def L(n):
-    """elimination matrix
-    symmetric case
-    """
-    # they use 1-based indexing
-    # k = sum(u(int(round((j - 1)*n + i - 0.5* j*(j - 1) -1)), n*(n+1)//2)[:, None].dot(vec(E(i, j, n, n))[None, :])
-    k = sum(u(int(np.trunc((j)*n + i - 0.5* (j + 1)*(j))), n*(n+1)//2)[:, None].dot(vec(E(i, j, n, n))[None, :])
-            for i in range(n) for j in range(i+1))
-    return k
-
-def K(n):
-    """selection matrix
-    symmetric case only
-    """
-    k = sum(np.kron(E(i, j, n, n), E(i, j, n, n).T)
-            for i in range(n) for j in range(n))
-    return k
-
-def Dup(n):
-    """duplication matrix
-    """
-    l = L(n)
-    ltl = l.T.dot(l)
-    k = K(n)
-    d = l.T + k.dot(l.T) - ltl.dot(k).dot(l.T)
-    return d
-
-from numdifftools import Jacobian
-
-
-sigma, (m,c) = res.mod_semopy.calc_sigma()
-sigma_inv = np.linalg.inv(sigma)
-d = Dup(sigma.shape[0])
-Wc = .5 * d.T @ np.kron(sigma_inv,sigma_inv) @ d
-
-
-Uc = Wc - Wc @ jac
-info, info_inv = res.mod_semopy.calc_fim(inverse = True)
-
-d_test = Dup(cov_log.shape[0])
-
-#----------------
-fim, fim_inv = res.mod_semopy.calc_fim(inverse = True)
-
-hess = Hessian(fun)(res.mod_semopy.param_vals)
-mx_inf = np.linalg.pinv(hess)
-g = sum(np.outer(g,g) for g in res.mod_semopy.grad_se_g(res.mod_semopy.param_vals))
-mx_inf = mx_inf @ g @ mx_inf
-
-
-test = res.mod_semopy.grad_se_g(res.mod_semopy.param_vals)
-
-
-
-
-
-
-
-
-
-
-sigma, (m,c) = res.mod_semopy.calc_sigma()
-sigma_inv = np.linalg.inv(sigma)
-mx_i = np.identity(sigma.shape[0])
-data = res.mod_semopy.mx_data.copy()
-data -= data.mean(axis=0)
-for i in range(res.mod_semopy.mx_data.shape[0]):
-    x = data[i, np.newaxis]
-
-t = sigma_inv @ (mx_i -  x.T @ x @ sigma_inv)
-
-sigma_grad = res.mod_semopy.calc_sigma_grad(m,c)
-
-test = np.einsum('ij,ji->', t, sigma_grad[0])
+#CFAWrapper(formula0a, 'MLW', 'formula0a_ls_mlr', robust = True, bootstrapchi = False, B = 1000, solver = 'SLSQP')

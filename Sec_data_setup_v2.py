@@ -86,8 +86,9 @@ file_rc = r'/{}/FFIEC CDR Call Schedule RC 1231{}.txt'
 file_rcd = r'/{}/FFIEC CDR Call Schedule RCD 1231{}.txt'
 
 ## RC-L
-file_rcl_1 = r'/{}/FFIEC CDR Call Schedule RCL 1231{}(1 of 2).txt'
-file_rcl_2 = r'/{}/FFIEC CDR Call Schedule RCL 1231{}(2 of 2).txt'
+file_rcl1 = r'/{}/FFIEC CDR Call Schedule RCL 1231{}.txt'
+file_rcl2_1 = r'/{}/FFIEC CDR Call Schedule RCL 1231{}(1 of 2).txt'
+file_rcl2_2 = r'/{}/FFIEC CDR Call Schedule RCL 1231{}(2 of 2).txt'
 
 ## RC-S
 file_rcs = r'/{}/FFIEC CDR Call Schedule RCS 1231{}.txt'
@@ -151,9 +152,12 @@ def loadRCL(i):
     ''' Dedicated function for loading RC-L data '''
     global path_call
 
-    df_load_1 = pd.read_csv((path_call + file_rcl_1).format(i,i), sep='\t',  skiprows = [1,2])
-    df_load_2 = pd.read_csv((path_call + file_rcl_2).format(i,i), sep='\t',  skiprows = [1,2])
-    df_load = df_load_1.merge(df_load_2, on = 'IDRSSD', how = 'left')
+    if i < 2009:
+        df_load = pd.read_csv((path_call + file_rcl1).format(i,i), sep='\t',  skiprows = [1,2])
+    else:
+        df_load_1 = pd.read_csv((path_call + file_rcl2_1).format(i,i), sep='\t',  skiprows = [1,2])
+        df_load_2 = pd.read_csv((path_call + file_rcl2_2).format(i,i), sep='\t',  skiprows = [1,2])
+        df_load = df_load_1.merge(df_load_2, on = 'IDRSSD', how = 'left')
 
     df_load['date'] = int('{}'.format(i))  
     
@@ -171,7 +175,7 @@ def combineVars(data, elem):
 
 # Run functions
 if __name__ == '__main__':
-    df_info = pd.concat(Parallel(n_jobs=num_cores)(delayed(loadInfo)(i) for i in range(start - 2000, end - 2000)))
+    df_info = pd.concat(Parallel(n_jobs=num_cores)(delayed(loadInfo)(str(i).zfill(2)) for i in range(start - 2000, end - 2000)))
     df_ri = pd.concat(Parallel(n_jobs=num_cores)(delayed(loadGeneral)(i, file_ri, vars_ri) for i in range(start, end)))
     df_rc = pd.concat(Parallel(n_jobs=num_cores)(delayed(loadGeneral)(i, file_rc, vars_rc) for i in range(start, end)))
     df_rcd = pd.concat(Parallel(n_jobs=num_cores)(delayed(loadGeneral)(i, file_rcd, vars_rcd) for i in range(start, end)))
@@ -360,7 +364,7 @@ def loadCleanHMDA(year):
         
         ### Loan sale dummies
         chunk['hmda_gse_dum'] = (chunk.purchaser_type.isin(range(1,4+1))) * 1
-        chunk['hmda_priv_dum'] = (chunk.purchaser_type.isin(list(range(6,9+1)) + [71, 72])) * 1
+        chunk['hmda_priv_dum'] = (chunk.purchaser_type.isin([6, 7, 8, 9, 71, 72])) * 1
         chunk['hmda_sec_dum'] = (chunk.purchaser_type == 5) * 1
         
         ### Loan sale amount
@@ -456,53 +460,89 @@ df['cr_se_on'] = df_raw.loc[:,['RCFDS475','RCFDS480','RCFDS485','RCFDS490']].sum
 # Off-balance sheet securitization exposures 
 df['cr_se_off'] = df_raw.RCFDS495
 '''
-# Assets sold and securitized with recourse 
+# Assets sold and securitized with recourse
+'''Note: separate the largest categories (see SIFMA 2017Q4, not counting CDOs). Ordered:
+    1) RMBS
+    2) Auto
+    3) Student (not available)
+    4) Credit card
+    
+    Because of data availability (not enough variation) we only keep RMBS, and auto, the
+    group the others in a rest category''' 
 df['cr_as_sec'] = df_raw.loc[:,['RCB{}'.format(i) for i in range(705,711+1)]].sum(axis = 1)
-df['cr_as_rmbs'] = df_raw.RCB705
 df['cr_as_abs'] = df_raw.loc[:,['RCB{}'.format(i) for i in range(706,711+1)]].sum(axis = 1)
+df['cr_as_rmbs'] = df_raw.RCB705
+df['cr_as_hel'] = df_raw.RCB706
+df['cr_as_ccr'] = df_raw.RCB707
+df['cr_as_auto'] = df_raw.RCB708
+df['cr_as_ocl'] = df_raw.RCB709
+df['cr_as_cil'] = df_raw.RCB710
+df['cr_as_aol'] = df_raw.RCB711
 
 # Assets sold and not securitized with recourse
+# Note: split in same categories as cr_as_.... Auto does not have enough variation
 df['cr_as_nonsec'] = df_raw.loc[:,['RCB{}'.format(i) for i in range(790,796+1)]].sum(axis = 1)
+df['cr_as_nsoth'] = df_raw.loc[:,['RCB{}'.format(i) for i in range(791,796+1)]].sum(axis = 1)
+df['cr_as_nsres'] = df_raw.RCB790
+df['cr_as_nshel'] = df_raw.RCB791
+df['cr_as_nsccr'] = df_raw.RCB792
+df['cr_as_nsauto'] = df_raw.RCB793
+df['cr_as_nsocl'] = df_raw.RCB794
+df['cr_as_nscil'] = df_raw.RCB795
+df['cr_as_nsaol'] = df_raw.RCB796
 
 # Maximum amount of credit exposure provided to other institutions
 df['cr_ce_sec'] = df_raw.loc[:,['RCB{}'.format(i) for i in range(776,782+1)]].sum(axis = 1)
-df['cr_ce_rmbs'] = df_raw.RCB776
 df['cr_ce_abs'] = df_raw.loc[:,['RCB{}'.format(i) for i in range(777,782+1)]].sum(axis = 1)
+df['cr_ce_rmbs'] = df_raw.RCB776
+df['cr_ce_hel'] = df_raw.RCB777
+df['cr_ce_ccr'] = df_raw.RCB778
+df['cr_ce_auto'] = df_raw.RCB779
+df['cr_ce_ocl'] = df_raw.RCB780
+df['cr_ce_cil'] = df_raw.RCB781
+df['cr_ce_aol'] = df_raw.RCB782
 
 # Outstanding principle balance small business obligations transferred with recourse
 df['cr_as_sbo'] = df_raw.RCA249
 
 # Maximum credit exposure to ABCP conduits (sponsered by the institution itself or by others)
 df['cr_abcp_ce'] = df_raw.loc[:,['RCB806','RCB807']].sum(axis = 1)
+df['cr_abcp_ce_own'] = df_raw.RCB806
+df['cr_abcp_ce_oth'] = df_raw.RCB807
 
 # Unused commitments to provide liquidity to ABCP conduits (sponsered by the institution itself or by others)
 df['cr_abcp_uc'] = df_raw.loc[:,['RCB808','RCB809']].sum(axis = 1)
+df['cr_abcp_uc_own'] = df_raw.RCB808
+df['cr_abcp_uc_oth'] = df_raw.RCB809
 
 # Total Assets Securitization Vehicles
 # NOTE: We only use the total assets of the securitization vehicles, because there is no
 # straight-forward variable measuring outstanding ABSs/CDOs. These vehicles can be both
 # ABS SPVs or CDO SPVs (or anything similar but not ABCP conduits/SIV)
 vars_secveh = ['RCJ{}'.format(i) for i in range(981,999+1,3)] +\
-              ['RCK{}'.format(str(i).zfill(3)) for i in range(3,12+1,3)] + \
-              ['RCK030']
+              ['RCK{}'.format(str(i).zfill(3)) for i in range(3,12+1,3)]
 df['cr_secveh_ta'] = df_raw.loc[:,vars_secveh].sum(axis = 1)
+df['cr_secveh_bm'] = df_raw.loc[:,['RCK021','RCK024']].sum(axis = 1) # other borrowed money and commercial paper
+df['cr_secveh_der'] = df_raw.RCK018
 
 # Total Assets ABCP Conduits
 # NOTE: The real exposure to ABCP comes from the conduits liabilities, especially
 # its commercial papers and repos. We included total assets in case these two 
 # variables do not have enough variation 
 vars_abcp = ['RCJ{}'.format(i) for i in range(982,997+1,3)] +\
-              ['RCK{}'.format(str(i).zfill(3)) for i in range(1,13+1,3)] + \
-              ['RCK032']
+              ['RCK{}'.format(str(i).zfill(3)) for i in range(1,13+1,3)]
 df['cr_abcp_ta'] = df_raw.loc[:,vars_abcp].sum(axis = 1)
+df['cr_abcp_bm'] = df_raw.loc[:,['RCK022','RCK025']].sum(axis = 1) # other borrowed money and commercial paper
 df['cr_abcp_cp'] = df_raw.RCK022
 df['cr_abcp_repo'] = df_raw.RCK016 # ALL ZERO
 
 # Total Assets Other VIE
 vars_vie_other = ['RCJ{}'.format(i) for i in range(983,988+1,3)] +\
-              ['RCK{}'.format(str(i).zfill(3)) for i in range(2,14+1,3)] + \
-              ['RCK031']
+              ['RCK{}'.format(str(i).zfill(3)) for i in range(2,14+1,3)]
 df['cr_ta_vie_other'] = df_raw.loc[:,vars_vie_other].sum(axis = 1)
+
+# Total assets
+df['ta'] = df_raw.RC2170
 
 #--------------------------------------------
 # Fill NA
@@ -538,7 +578,7 @@ for var in vars_tot:
     '''
 
 ## Drop cr_abcp_repo
-df.drop(columns = 'cr_abcp_repo', inplace = True)
+#df.drop(columns = 'cr_abcp_repo', inplace = True)
     
 ## Remove outliers
 df = df.loc[df.cr_serv_fees != df.cr_serv_fees.min(),:]

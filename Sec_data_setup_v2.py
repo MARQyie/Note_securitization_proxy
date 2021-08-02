@@ -42,7 +42,7 @@ os.chdir(r'D:\RUG\PhD\Materials_papers\01-Note_on_securitization')
 #--------------------------------------------
 
 # Set start and end date
-start = 2011
+start = 2007
 end = 2018
 
 # Get the number of cores
@@ -119,7 +119,7 @@ vars_rcs = '|'.join(['IDRSSD', 'B705', 'B706', 'B707', 'B708',\
                      'B792', 'B793', 'B794', 'B795', 'B796',\
                      'B776', 'B777', 'B778', 'B779', 'B780',\
                      'B781', 'B782','B806','B807','B808','B809',\
-                     'A249'])
+                     'A249','B783','B784','B785','B786','B787','B788','B789'])
 
 ## RC-V
 vars_rcv = '|'.join(['IDRSSD'] + ['J{}'.format(i) for i in range(981, 999 + 1)] +\
@@ -181,15 +181,14 @@ if __name__ == '__main__':
     df_rcd = pd.concat(Parallel(n_jobs=num_cores)(delayed(loadGeneral)(i, file_rcd, vars_rcd) for i in range(start, end)))
     df_rcl = pd.concat(Parallel(n_jobs=num_cores)(delayed(loadRCL)(i) for i in range(start, end)))
     df_rcs = pd.concat(Parallel(n_jobs=num_cores)(delayed(loadGeneral)(i, file_rcs, vars_rcs) for i in range(start, end)))
-    df_rcv = pd.concat(Parallel(n_jobs=num_cores)(delayed(loadGeneral)(i, file_rcv, vars_rcv) for i in range(start, end)))
+    #df_rcv = pd.concat(Parallel(n_jobs=num_cores)(delayed(loadGeneral)(i, file_rcv, vars_rcv) for i in range(start, end)))
     
 # Concat all dfs
 df_cr_raw = df_info.set_index(['IDRSSD','date']).join([df_ri.set_index(['IDRSSD','date']),\
                            df_rc.set_index(['IDRSSD','date']),\
                            df_rcd.set_index(['IDRSSD','date']),\
                            df_rcl.set_index(['IDRSSD','date']),\
-                           df_rcs.set_index(['IDRSSD','date']),\
-                           df_rcv.set_index(['IDRSSD','date'])], how = 'inner')
+                           df_rcs.set_index(['IDRSSD','date'])], how = 'inner')
     
 #--------------------------------------------
 # Transform variables
@@ -239,14 +238,14 @@ path_hmda_panel = r'D:/RUG/Data/Data_HMDA/Panel/'
 # Get file names
 file_lf = r'hmdpanel17.dta'
 file_lf18 = r'hmdpan2018b.dta' 
-file_lf19 = r'hmdpan2019b.dta' 
-file_hmda_1017 = r'hmda_{}_nationwide_originated-records_codes.zip'
+file_lf19 = r'hmdpan2019b.dta'
+file_hmda_0717 = r'hmda_{}_nationwide_originated-records_codes.zip'
 file_hmda_1819 = r'year_{}.csv'
-#file_hmda_panel_1017 = r'hmda_{}_panel.zip'
 file_hmda_panel_1819 = r'{}_public_panel_csv.csv'
 
 ## Set d-types and na-vals for HMDA LAR
-dtypes_col_hmda = {'state_code':'str', 'county_code':'str'}
+dtypes_col_hmda = {'respondent_id':'object','state_code':'str', 'county_code':'str','msamd':'str',\
+                   'census_tract_number':'str', 'derived_msa-md':'str'}
 na_values = ['NA   ', 'NA ', '...',' ','NA  ','NA      ','NA     ','NA    ','NA', 'Exempt', 'N/AN/', 'na']
 
 # Get variable names
@@ -254,7 +253,7 @@ vars_hmda = ['respondent_id', 'hmda_gse_amount', 'hmda_priv_amount',\
              'hmda_sec_amount', 'loan_amount_000s']
 #vars_hmda_panel_1017 = ['Respondent ID','parent_rssd']
 vars_hmda_panel_1819 = ['lei', 'arid_2017', 'tax_id']
-vars_lf = ['hmprid'] + ['ENTITY{}'.format(str(year)[2:4]) for year in range(start, end - 2)]
+vars_lf = ['hmprid'] + ['ENTITY{}'.format(str(year)[2:4]) for year in range(start, end)]
 
 # df LF
 df_lf = pd.read_stata(path_lf + file_lf, columns = vars_lf)
@@ -270,10 +269,10 @@ df_lf19 = df_lf19[~(df_lf19['ENTITY19'] == 0.)]
 df_lf = df_lf[df_lf[vars_lf[1:]].all(axis = 1)] # Drop rows that have different column values (nothing gets deleted: good)
 
 # Reshape
-lf_reshaped_list = [df_lf.loc[:,df_lf.columns.str.contains('hmprid|{}'.format(year))].dropna().rename(columns = {'ENTITY{}'.format(year):'entity'}) for year in range(11, 17 + 1)]
+lf_reshaped_list = [df_lf.loc[:,df_lf.columns.str.contains('hmprid|{}'.format(str(year).zfill(2)))].dropna().rename(columns = {'ENTITY{}'.format(str(year).zfill(2)):'entity'}) for year in range(start - 2000, end - 2000)]
 
 # Add dates
-for  i, year in zip(range(len(range(2011, 2017 + 1))),range(2011, 2017 + 1)):
+for  i, year in zip(range(len(range(start, end + 1))),range(start, end)):
     lf_reshaped_list[i]['date'] = year
     
 # Add 2018 and 2019
@@ -306,7 +305,7 @@ state_dict = dict(zip(states,statecodes))
 def loadCleanHMDA(year):
     #Load the dataframe in a temporary frame
     if year < 2018:
-        df_chunk = pd.read_csv(path_hmda + file_hmda_1017.format(year),\
+        df_chunk = pd.read_csv(path_hmda + file_hmda_0717.format(year),\
                                index_col = 0, chunksize = 1e6, na_values = na_values,\
                                dtype = dtypes_col_hmda)
         #df_panel = pd.read_csv(path_hmda_panel + file_hmda_panel_1017.format(year))
@@ -502,6 +501,11 @@ df['cr_ce_ocl'] = df_raw.RCB780
 df['cr_ce_cil'] = df_raw.RCB781
 df['cr_ce_aol'] = df_raw.RCB782
 
+# Unused Commitments provided to other institutions securitization activities
+df['cr_uc_sec'] = df_raw.loc[:,['RCB{}'.format(i) for i in range(783,789+1)]].sum(axis = 1)
+df['cr_uc_abs'] = df_raw.loc[:,['RCB{}'.format(i) for i in range(784,789+1)]].sum(axis = 1)
+df['cr_uc_rmbs'] = df_raw.RCB783
+
 # Outstanding principle balance small business obligations transferred with recourse
 df['cr_as_sbo'] = df_raw.RCA249
 
@@ -515,6 +519,7 @@ df['cr_abcp_uc'] = df_raw.loc[:,['RCB808','RCB809']].sum(axis = 1)
 df['cr_abcp_uc_own'] = df_raw.RCB808
 df['cr_abcp_uc_oth'] = df_raw.RCB809
 
+'''OLD
 # Total Assets Securitization Vehicles
 # NOTE: We only use the total assets of the securitization vehicles, because there is no
 # straight-forward variable measuring outstanding ABSs/CDOs. These vehicles can be both
@@ -540,7 +545,7 @@ df['cr_abcp_repo'] = df_raw.RCK016 # ALL ZERO
 vars_vie_other = ['RCJ{}'.format(i) for i in range(983,988+1,3)] +\
               ['RCK{}'.format(str(i).zfill(3)) for i in range(2,14+1,3)]
 df['cr_ta_vie_other'] = df_raw.loc[:,vars_vie_other].sum(axis = 1)
-
+'''
 # Total assets
 df['ta'] = df_raw.RC2170
 
@@ -549,7 +554,7 @@ df['ta'] = df_raw.RC2170
 df.fillna(0, inplace = True)
 
 # Remove negative values in cr_ta_secveh
-df = df[df.cr_secveh_ta >= 0]
+#df = df[df.cr_secveh_ta >= 0]
 
 # NOTE: All bank-years have at least one non-zero value 
 

@@ -47,20 +47,19 @@ df = pd.read_csv('Data\df_sec_note.csv', index_col = 0)
 # set variable names
 var_names = ['cr_as_nsres','cr_as_nsoth','hmda_gse_amount','hmda_priv_amount',\
              'cr_ls_income','cr_as_rmbs','cr_as_abs','hmda_sec_amount',\
-             'cr_sec_income','cr_ce_rmbs','cr_ce_abs','cr_as_sbo',\
+             'cr_sec_income','cr_as_sbo',\
              'cr_cds_purchased','cr_trs_purchased','cr_co_purchased',\
-             'cr_abcp_uc_own','cr_abcp_ce_own','cr_abcp_uc_oth','cr_abcp_ce_oth',\
+             'cr_abcp_uc_own','cr_abcp_ce_own','cr_abcp_uc_oth',\
                  'cr_serv_fees']
 var_labels = ['Res. Assets Sold, Not Sec.','Other Assets Sold, Not Sec.',\
               'Sold To GSE (HMDA)','Sold to Private (HMDA)',\
               'Loan Sales Income','Res. Assets Sold, Sec.',\
               'Other Assets Sold, Sec.','Securitized (HMDA)',\
-              'Sec. Income','Res. Credit Exp. Others',\
-              'Other Credit Exp. Others','SBO Sold',\
+              'Sec. Income','SBO Sold',\
               'CDSs Purchased','TRSs Purchased',\
               'COs Purchased','Unused Com. ABCP (Own)',\
               'Credit Exp. ABCP (Own)','Unused Com. ABCP (Others)',\
-              'Credit Exp. ABCP (Others)', 'Net Servicing Fees']
+              'Net Servicing Fees']
 # Subset data to only needed variables
 df_sub = df[var_names]
 
@@ -106,7 +105,7 @@ for i in range(len(var_names)):
 bartlett_chi, bartlett_p = calculate_bartlett_sphericity(df_standard) # p = 0.0
 
 # Kaiser-Meyer-Olkin (KMO) test. Measures data suitability; should be between 0 and 1, but above 0.5
-kmo_all, kmo_model = calculate_kmo(df_standard) #kmo_model = 0.84
+kmo_all, kmo_model = calculate_kmo(df_standard) #kmo_model = 0.85
 
 '''Note: looks good '''
 
@@ -153,12 +152,11 @@ plt.tight_layout()
 
 fig.savefig('Figures/Dimension_reduction/FA_parallel.png')
 
-'''NOTE: First 7 factors have an eigen value greater than 1.
+'''NOTE: First 6 factors have an eigen value greater than 1.
     Parallel analysis: ev_parallel is slightly above ev_efa: 
-        N factors is 5
-    Scree plot: 5 factors
+        N factors is 4
     
-    Conclusion: 5 factors is appropriate, which is a more conservative number'''
+    Conclusion: 4 factors is appropriate, which is a more conservative number'''
 #--------------------------------------------
 # Factor rotation all variables
 # Note: No orthogonal rotations, since the orth. assumption is unrealistic
@@ -166,12 +164,12 @@ fig.savefig('Figures/Dimension_reduction/FA_parallel.png')
 #--------------------------------------------
     
 # Get factor estimates
-fa = FactorAnalyzer(rotation = None, n_factors = 5, method = 'principal')
+fa = FactorAnalyzer(rotation = None, n_factors = 4, method = 'principal')
 fa.fit(df_standard)
 
 # Get the non-rotated factor loadings
 fa_loadings = pd.DataFrame(fa.loadings_,\
-                           columns = range(5),\
+                           columns = range(4),\
                            index = var_names)
 
 fa_loadings.to_csv('Results/fa_loadings_norotation.csv')
@@ -180,34 +178,34 @@ fa_loadings.to_csv('Results/fa_loadings_norotation.csv')
 # Oblique rotations
 
 # Promax 
-fa_pm = FactorAnalyzer(rotation = 'promax', n_factors = 5, method = 'principal')
+fa_pm = FactorAnalyzer(rotation = 'promax', n_factors = 4, method = 'principal')
 fa_pm.fit(df_standard)
 
 ## Get the factor loadings 
 fa_pm_loadings = pd.DataFrame(fa_pm.loadings_,\
-                           columns = range(5),\
+                           columns = range(4),\
                            index = var_names)
 
 fa_pm_loadings.to_csv('Results/fa_loadings_promax.csv')
 
 # Oblimin
-fa_om = FactorAnalyzer(rotation = 'oblimin', n_factors = 5, method = 'principal')
+fa_om = FactorAnalyzer(rotation = 'oblimin', n_factors = 4, method = 'principal')
 fa_om.fit(df_standard)
 
 ## Get the factor loadings 
 fa_om_loadings = pd.DataFrame(fa_om.loadings_,\
-                           columns = range(5),\
+                           columns = range(4),\
                            index = var_names)
 
 fa_om_loadings.to_csv('Results/fa_loadings_oblimin.csv')
 
 # Quartimin
-fa_qmo = FactorAnalyzer(rotation = 'quartimin', n_factors = 5, method = 'principal')
+fa_qmo = FactorAnalyzer(rotation = 'quartimin', n_factors = 4, method = 'principal')
 fa_qmo.fit(df_standard)
 
 ## Get the factor loadings 
 fa_qmo_loadings = pd.DataFrame(fa_qmo.loadings_,\
-                           columns = range(5),\
+                           columns = range(4),\
                            index = var_names)
 
 fa_qmo_loadings.to_csv('Results/fa_loadings_quartimin.csv')
@@ -217,15 +215,15 @@ fa_qmo_loadings.to_csv('Results/fa_loadings_quartimin.csv')
     We base ourselfs on the promax rotation, other oblique rotations might
     lead to other results.
         
-    Badly behaving indicators (low loadings)            : cr_as_nsoth, cr_ls_income, cr_as_rmbs, hmda_sec_amount
-    Badly behaving indicators (multiple high loadings)  : NONE
-    Badly identified factors (only 1--2 salient loading) : F3, F5
+    Badly behaving indicators (low loadings)            : cr_ls_income, hmda_sec_amount
+    Badly behaving indicators (multiple high loadings)  : cr_as_abs
+    Badly identified factors (only 1--2 salient loading) : F4
         
     Interpretation Factors:
         F0: CDO/ABCP Securitization
         F1: Loan Sales
         F2: Credit Exposure Others
-        F3: UNCLEAR
+        F3: Non-residential asset sales
         F4: UNCLEAR
     
     Conclusion: Interpretation of the factors is straight forward. Two
@@ -248,9 +246,9 @@ fa_pm2_loadings = pd.DataFrame(fa_pm2.loadings_,\
                            index = var_names)
 
 # Get list with only good behaving indicators
-var_names_good = [var for var in var_names if var not in ['cr_ls_income','hmda_sec_amount',\
-                                                          'cr_sec_income','cr_as_sbo',
-                                                          'cr_abcp_ce_oth','cr_serv_fees']]
+var_names_good = [var for var in var_names if var not in ['cr_serv_fees', 'hmda_sec_amount',\
+                                                          'cr_ls_income', 'cr_as_nsoth',\
+                                                          'cr_sec_income','cr_as_sbo']]
 # Promax
 fa_pm2 = FactorAnalyzer(rotation = 'promax', n_factors = 3)
 fa_pm2.fit(df_standard[var_names_good])
@@ -279,7 +277,7 @@ writer.save()
 #--------------------------------------------
 
 # Rename columns
-fa_pm_loadings.columns = pd.MultiIndex.from_product([['Five Factor Model',],['F1','F2','F3','F4','F5']])
+fa_pm_loadings.columns = pd.MultiIndex.from_product([['Five Factor Model',],['F1','F2','F3','F4']])
 fa_pm2_loadings.columns = pd.MultiIndex.from_product([['Three Factor Model',],['F1','F2','F3']])
 
 # Combine 4 and 2 factor models
@@ -297,8 +295,8 @@ fa_table = fa_table.replace('nan', '')
 
 # Prelims
 column_format = 'p{4cm}' + 'p{1cm}' * fa_table.shape[1]
-caption = ('Results Explanatory Factor Analysis: Five Factor Model')
-notes = '\\multicolumn{9}{p{15.2cm}}{{\\textit{Notes.} Factor loadings based on the oblique promax rotation. The explanatory factor models are estimated by a principal factor algorithm implemented by factor analyzer in Python. The principal factor algorithm is more robust to deviations from normal than a standard maximum likelihood algorithm. The first five columns contain the factor loadings from a four factor model with all proxies. The last three columns present the factor loadings of a two factor model which we obtained by deleting all badly behavind indicators and factors. We first ran a three factor model and then deleted the badly behaving indicators. The number of original factors are determined by a parallel analysis. Factor loadings are in boldface if they are greater than 0.4, and in italics if they are between 0.3 and 0.4.}} \n'
+caption = ('Results Explanatory Factor Analysis: Four Factor Model')
+notes = '\\multicolumn{8}{p{14.2cm}}{{\\textit{Notes.} Factor loadings based on the oblique promax rotation. The explanatory factor models are estimated by a principal factor algorithm implemented by factor analyzer in Python. The principal factor algorithm is more robust to deviations from normal than a standard maximum likelihood algorithm. The first four columns contain the factor loadings from a four factor model with all proxies. The last three columns present the factor loadings of a two factor model which we obtained by deleting all badly behavind indicators and factors. We first ran a three factor model and then deleted the badly behaving indicators. The number of original factors are determined by a parallel analysis. Factor loadings are in boldface if they are greater than 0.4, and in italics if they are between 0.3 and 0.4.}} \n'
 label = 'tab:efa_table'
 position = 'th'
 string_size = '\\scriptsize\n'

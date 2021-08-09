@@ -181,7 +181,7 @@ if __name__ == '__main__':
     df_rcd = pd.concat(Parallel(n_jobs=num_cores)(delayed(loadGeneral)(i, file_rcd, vars_rcd) for i in range(start, end)))
     df_rcl = pd.concat(Parallel(n_jobs=num_cores)(delayed(loadRCL)(i) for i in range(start, end)))
     df_rcs = pd.concat(Parallel(n_jobs=num_cores)(delayed(loadGeneral)(i, file_rcs, vars_rcs) for i in range(start, end)))
-    #df_rcv = pd.concat(Parallel(n_jobs=num_cores)(delayed(loadGeneral)(i, file_rcv, vars_rcv) for i in range(start, end)))
+    df_rcv = pd.concat(Parallel(n_jobs=num_cores)(delayed(loadGeneral)(i, file_rcv, vars_rcv) for i in range(2011, end)))
     
 # Concat all dfs
 df_cr_raw = df_info.set_index(['IDRSSD','date']).join([df_ri.set_index(['IDRSSD','date']),\
@@ -189,6 +189,8 @@ df_cr_raw = df_info.set_index(['IDRSSD','date']).join([df_ri.set_index(['IDRSSD'
                            df_rcd.set_index(['IDRSSD','date']),\
                            df_rcl.set_index(['IDRSSD','date']),\
                            df_rcs.set_index(['IDRSSD','date'])], how = 'inner')
+    
+df_cr_raw = df_cr_raw.merge(df_rcv.set_index(['IDRSSD','date']), how = 'left', left_index = True, right_index = True)
     
 #--------------------------------------------
 # Transform variables
@@ -519,7 +521,7 @@ df['cr_abcp_uc'] = df_raw.loc[:,['RCB808','RCB809']].sum(axis = 1)
 df['cr_abcp_uc_own'] = df_raw.RCB808
 df['cr_abcp_uc_oth'] = df_raw.RCB809
 
-'''OLD
+
 # Total Assets Securitization Vehicles
 # NOTE: We only use the total assets of the securitization vehicles, because there is no
 # straight-forward variable measuring outstanding ABSs/CDOs. These vehicles can be both
@@ -545,7 +547,7 @@ df['cr_abcp_repo'] = df_raw.RCK016 # ALL ZERO
 vars_vie_other = ['RCJ{}'.format(i) for i in range(983,988+1,3)] +\
               ['RCK{}'.format(str(i).zfill(3)) for i in range(2,14+1,3)]
 df['cr_ta_vie_other'] = df_raw.loc[:,vars_vie_other].sum(axis = 1)
-'''
+
 # Total assets
 df['ta'] = df_raw.RC2170
 
@@ -583,7 +585,7 @@ for var in vars_tot:
     '''
 
 ## Drop cr_abcp_repo
-#df.drop(columns = 'cr_abcp_repo', inplace = True)
+df.drop(columns = 'cr_abcp_repo', inplace = True)
     
 ## Remove outliers
 df = df.loc[df.cr_serv_fees != df.cr_serv_fees.min(),:]
@@ -593,3 +595,4 @@ df = df.loc[df.cr_serv_fees != df.cr_serv_fees.min(),:]
 #--------------------------------------------
 
 df.to_csv('Data\df_sec_note.csv')
+df[df.date > 2010].to_csv('Data\df_sec_note_20112017.csv')

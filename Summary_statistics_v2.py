@@ -35,7 +35,7 @@ df = pd.read_csv('Data\df_sec_note.csv', index_col = 0)
 # Variable names
 var_names = ['cr_as_nsres','cr_as_nsoth','hmda_gse_amount','hmda_priv_amount',\
              'cr_ls_income','cr_as_rmbs','cr_as_abs','hmda_sec_amount',\
-             'cr_sec_income','cr_ce_rmbs','cr_ce_abs','cr_as_sbo',\
+             'cr_sec_income','cr_as_sbo',\
              'cr_cds_purchased','cr_trs_purchased','cr_co_purchased',\
              'cr_abcp_uc_own','cr_abcp_ce_own','cr_abcp_uc_oth','cr_abcp_ce_oth',\
                  'cr_serv_fees']
@@ -43,8 +43,7 @@ var_labels = ['Res. Assets Sold, Not Sec.','Other Assets Sold, Not Sec.',\
               'Sold To GSE (HMDA)','Sold to Private (HMDA)',\
               'Loan Sales Income','Res. Assets Sold, Sec.',\
               'Other Assets Sold, Sec.','Securitized (HMDA)',\
-              'Sec. Income','Res. Credit Exp. Others',\
-              'Other Credit Exp. Others','SBO Sold',\
+              'Sec. Income','SBO Sold',\
               'CDSs Purchased','TRSs Purchased',\
               'COs Purchased','Unused Com. ABCP (Own)',\
               'Credit Exp. ABCP (Own)','Unused Com. ABCP (Others)',\
@@ -123,7 +122,7 @@ num_sec.index = ['N'] + var_labels
 # Set function
 def resultsToLatex(results, caption = '', label = '', size_string = '\\scriptsize \n',  note_string = None, sidewaystable = False):
     # Prelim
-    if results.shape == (20,6):
+    if results.shape == (18,6):
         function_parameters = dict(na_rep = '',
                                index_names = True,
                                column_format = 'p{4cm}' + 'p{1.5cm}' * results.shape[1],

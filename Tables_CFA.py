@@ -60,7 +60,7 @@ def tidyParamEst(data):
     # Set index names
     ## Prelims
     index_lst = list()
-    lst_factors = ('SEC','LS','ABS','CDO','ABCP')
+    lst_factors = ('SEC','LS','ABS','CDO','ABCP','ABSCDO','CD')
     var_dict = {'cr_as_nsres':1,
                 'cr_as_nsoth':2,
                 'hmda_gse_amount':3,
@@ -120,7 +120,8 @@ def tidyFitInd(data):
               'baseline.df','baseline.chisq', 'baseline.pvalue', 'baseline.chisq.scaled',\
               'baseline.pvalue.scaled', 'baseline.chisq.scaling.factor',\
               'gfi','agfi','nfi','tli.robust','cfi.robust','rmsea.robust',\
-              'rmsea.ci.lower.robust', 'rmsea.ci.upper.robust','srmr','ifi','rni.robust']
+              'rmsea.ci.lower.robust', 'rmsea.ci.upper.robust','srmr','ifi','rni.robust',\
+              'aic','bic']
     data_clean = data.loc[lst_fi,:]
     
     # Rename index
@@ -130,11 +131,14 @@ def tidyFitInd(data):
                      '$\chi^2$ baseline (scaled)', 'p-val $\chi^2$ baseline (scaled)', '$\chi^2$ baseline scaling factor',\
                      'GFI','AGFI','NFI','TLI (robust)','CFI (robust)','RMSEA (robust)',\
                      'RMSEA lower bound (robust)', 'RMSEA upper bound (robust)',\
-                     'SRMR','IFI','RNI (robust)']
+                     'SRMR','IFI','RNI (robust)','AIC','BIC']
     data_clean.index = lst_fi_labels
     
     # Rename columns
-    data_clean.rename(columns = {'Unnamed: 1':'Index'}, inplace = True)
+    if data.shape[1] == 2:
+        data_clean.columns = ['First-Order','Second-Order']
+    else:
+        data_clean.rename(columns = {'Unnamed: 1':'Index'}, inplace = True)
     
     return data_clean
 
@@ -150,7 +154,7 @@ def tidyModInd(data):
     # Set index names
     ## Prelims
     index_lst = list()
-    lst_factors = ('SEC','LS','ABS','CDO','ABCP')
+    lst_factors = ('SEC','LS','ABS','CDO','ABCP','ABSCDO','CD')
     var_dict = {'cr_as_nsres':1,
                 'cr_as_nsoth':2,
                 'hmda_gse_amount':3,
@@ -217,33 +221,36 @@ dict_vars.update({'LS':'Loan Sales',
 
 # Parameter estimates
 df_params_nonest = pd.read_csv('Results/CFA_params_nonest.csv', index_col = 0)
-df_params_nest = pd.read_csv('Results/CFA_params_nest.csv', index_col = 0)
+df_params_nest = pd.read_csv('Results/CFA_params_impr_nest.csv', index_col = 0)
 df_params_impr = pd.read_csv('Results/CFA_params_impr.csv', index_col = 0)
 
 # Model implied covariance matrix
 df_micm_nonest = pd.read_csv('Results/CFA_modimplied_cov_nonest.csv', index_col = 0)
-df_micm_nest = pd.read_csv('Results/CFA_modimplied_cov_nest.csv', index_col = 0)
+df_micm_nest = pd.read_csv('Results/CFA_modimplied_cov_impr_nest.csv', index_col = 0)
 df_micm_impr = pd.read_csv('Results/CFA_modimplied_cov_impr.csv', index_col = 0)
 
 # Residual covariance matrix
 df_rcm_nonest = pd.read_csv('Results/CFA_rescov_nonest.csv', index_col = 0)
 df_srcm_nonest = pd.read_csv('Results/CFA_rescov_standard_nonest.csv', index_col = 0)
 
-df_rcm_nest = pd.read_csv('Results/CFA_rescov_nest.csv', index_col = 0)
-df_srcm_nest = pd.read_csv('Results/CFA_rescov_standard_nest.csv', index_col = 0)
+df_rcm_nest = pd.read_csv('Results/CFA_rescov_impr_nest.csv', index_col = 0)
+df_srcm_nest = pd.read_csv('Results/CFA_rescov_standard_impr_nest.csv', index_col = 0)
 
 df_rcm_impr = pd.read_csv('Results/CFA_rescov_impr.csv', index_col = 0)
 df_srcm_impr = pd.read_csv('Results/CFA_rescov_standard_impr.csv', index_col = 0)
 
 # fit indices 
 df_fi_nonest = pd.read_csv('Results/CFA_fitmeasures_nonest.csv', index_col = 0)
-df_fi_nest = pd.read_csv('Results/CFA_fitmeasures_nest.csv', index_col = 0)
+df_fi_nest = pd.read_csv('Results/CFA_fitmeasures_impr_nest.csv', index_col = 0)
 df_fi_impr = pd.read_csv('Results/CFA_fitmeasures_impr.csv', index_col = 0)
 
 # Modification indices
 df_mi_nonest = pd.read_csv('Results/CFA_modindices_nonest.csv', index_col = 0)
-df_mi_nest = pd.read_csv('Results/CFA_modindices_nest.csv', index_col = 0)
+df_mi_nest = pd.read_csv('Results/CFA_modindices_impr_nest.csv', index_col = 0)
 df_mi_impr = pd.read_csv('Results/CFA_modindices_impr.csv', index_col = 0)
+
+# Communalities
+df_r2_impr = pd.read_csv('Results/CFA_r2_impr.csv', index_col = 0)
 
 #--------------------------------------------
 # Parameter estimates 
@@ -255,11 +262,11 @@ df_params_nonest_tidy = tidyParamEst(df_params_nonest)
 
 ## To latex
 ### Prelims
-dict_options = {'column_format':'p{2cm}' + 'p{1.25cm}' * df_params_nonest_tidy.shape[1],
-                'caption':('Parameter Estimates: Non-Nested Model'),
+dict_options = {'column_format':'p{3cm}' + 'p{1.25cm}' * df_params_nonest_tidy.shape[1],
+                'caption':('Parameter Estimates: First-Order Model'),
                 'label':'tab:cfa_table_nonest',
                 'position':'th'}
-notes = '\\multicolumn{7}{p{12cm}}{\\textit{Notes.} Parameter estimates, factor variances and indicator variances of the factor model without a nested securitization structure. All factors are allowed to correlate. The second to last column contains the standardized parameter estimates, where the factor variances are fixed to one. The last column presents the completely standardized parameter estimates, where the factor variances are fixed to one and all other parameters are standardized.} \n'
+notes = '\\multicolumn{7}{p{13cm}}{\\textit{Notes.} Parameter estimates, factor variances and indicator variances of the factor model without a second-order securitization structure. All factors are allowed to correlate. The second to last column contains the standardized parameter estimates, where the factor variances are fixed to one. The last column presents the completely standardized parameter estimates, where the factor variances are fixed to one and all other parameters are standardized.} \n'
 string_size = '\\tiny\n'
 
 ### Get latex table and save
@@ -274,11 +281,11 @@ df_params_nest_tidy = tidyParamEst(df_params_nest)
 
 ## To latex
 ### Prelims
-dict_options = {'column_format':'p{2cm}' + 'p{1.25cm}' * df_params_nest_tidy.shape[1],
-                'caption':('Parameter Estimates: Nested Model'),
+dict_options = {'column_format':'p{3cm}' + 'p{1.25cm}' * df_params_nest_tidy.shape[1],
+                'caption':('Parameter Estimates: Respecified Second-Order Model'),
                 'label':'tab:cfa_table_nest',
                 'position':'th'}
-notes = '\\multicolumn{7}{p{12cm}}{\\textit{Notes.} Parameter estimates, factor variances and indicator variances of the factor model with a nested securitization structure. The factors ABS, CDO, ABCP are nested under a factor Securitization, which captures the general variance of securitization and equals the hypothesized factor model.The second to last column contains the standardized parameter estimates, where the factor variances are fixed to one. The last column presents the completely standardized parameter estimates, where the factor variances are fixed to one and all other parameters are standardized.} \n'
+notes = '\\multicolumn{7}{p{13cm}}{\\textit{Notes.} Parameter estimates, factor variances and indicator variances of the factor model with a nested securitization structure. The factors ABS, CDO, ABCP are nested under a factor Securitization, which captures the general variance of securitization and equals the hypothesized factor model.The second to last column contains the standardized parameter estimates, where the factor variances are fixed to one. The last column presents the completely standardized parameter estimates, where the factor variances are fixed to one and all other parameters are standardized.} \n'
 string_size = '\\tiny\n'
 
 ### Get latex table and save
@@ -293,11 +300,11 @@ df_params_impr_tidy = tidyParamEst(df_params_impr)
 
 ## To latex
 ### Prelims
-dict_options = {'column_format':'p{2cm}' + 'p{1.25cm}' * df_params_impr_tidy.shape[1],
-                'caption':('Parameter Estimates: Nested Model'),
+dict_options = {'column_format':'p{3cm}' + 'p{1.25cm}' * df_params_impr_tidy.shape[1],
+                'caption':('Parameter Estimates: Respecified First-Order Model'),
                 'label':'tab:cfa_table_impr',
                 'position':'th'}
-notes = '\\multicolumn{7}{p{12cm}}{\\textit{Notes.} Parameter estimates, factor variances and indicator variances of the improved factor model without a nested securitization structure. The improved model is similar to the non-nested model but without the CDO factor and without servicing fees.The second to last column contains the standardized parameter estimates, where the factor variances are fixed to one. The last column presents the completely standardized parameter estimates, where the factor variances are fixed to one and all other parameters are standardized.} \n'
+notes = '\\multicolumn{7}{p{13cm}}{\\textit{Notes.} Parameter estimates, factor variances and indicator variances of the respecified factor model without a nested securitization structure. The improved model is similar to the non-nested model but without the CDO factor and without servicing fees.The second to last column contains the standardized parameter estimates, where the factor variances are fixed to one. The last column presents the completely standardized parameter estimates, where the factor variances are fixed to one and all other parameters are standardized.} \n'
 string_size = '\\tiny\n'
 
 ### Get latex table and save
@@ -346,10 +353,10 @@ df_fi_nonest_tidy = tidyFitInd(df_fi_nonest)
 ## To latex
 ### Prelims
 dict_options = {'column_format':'p{4cm}' + 'p{1.5cm}' * df_fi_nonest_tidy.shape[1],
-                'caption':('Fit Indices: Non-Nested Model'),
+                'caption':('Fit Indices: First-Order Model'),
                 'label':'tab:cfa_fit_nonest',
                 'position':'th'}
-notes = '\\multicolumn{2}{p{5.5cm}}{\\textit{Notes.} Fit indices of the non-nested model.} \n'
+notes = '\\multicolumn{2}{p{5.5cm}}{\\textit{Notes.} Fit indices of the first-order model.} \n'
 string_size = '\\scriptsize\n'
 
 ### Get latex table and save
@@ -358,6 +365,27 @@ text_latex_fi_nonest = open('Results/CFA_fi_nonest.tex', 'w')
 text_latex_fi_nonest.write(latex_fi_nonest)
 text_latex_fi_nonest.close()
 
+# Respecified model
+df_fi_resp = pd.concat([df_fi_impr, df_fi_nest], axis = 1)
+
+## Get tidy table
+df_fi_resp_tidy = tidyFitInd(df_fi_resp)
+
+## To latex
+### Prelims
+dict_options = {'column_format':'p{4cm}' + 'p{1.5cm}' * df_fi_resp_tidy.shape[1],
+                'caption':('Fit Indices: Respecified Model Model'),
+                'label':'tab:cfa_fit_resp',
+                'position':'th'}
+notes = '\\multicolumn{3}{p{7.5cm}}{\\textit{Notes.} Fit indices of the respecified first- and second-order model.} \n'
+string_size = '\\scriptsize\n'
+
+### Get latex table and save
+latex_fi_nest = table2Latex(df_fi_resp_tidy,dict_options,notes,string_size)
+text_latex_fi_nest = open('Results/CFA_fi_resp.tex', 'w')
+text_latex_fi_nest.write(latex_fi_nest)
+text_latex_fi_nest.close()
+
 # Nested model
 ## Get tidy table
 df_fi_nest_tidy = tidyFitInd(df_fi_nest)
@@ -365,10 +393,10 @@ df_fi_nest_tidy = tidyFitInd(df_fi_nest)
 ## To latex
 ### Prelims
 dict_options = {'column_format':'p{4cm}' + 'p{1.5cm}' * df_fi_nest_tidy.shape[1],
-                'caption':('Fit Indices: Nested Model'),
+                'caption':('Fit Indices: Respecified Second-Order Model Model'),
                 'label':'tab:cfa_fit_nest',
                 'position':'th'}
-notes = '\\multicolumn{2}{p{5.5cm}}{\\textit{Notes.} Fit indices of the hypothesized model.} \n'
+notes = '\\multicolumn{2}{p{5.5cm}}{\\textit{Notes.} Fit indices of the respecified second-order model.} \n'
 string_size = '\\scriptsize\n'
 
 ### Get latex table and save
@@ -384,10 +412,10 @@ df_fi_impr_tidy = tidyFitInd(df_fi_impr)
 ## To latex
 ### Prelims
 dict_options = {'column_format':'p{4cm}' + 'p{1.5cm}' * df_fi_impr_tidy.shape[1],
-                'caption':('Fit Indices: Improved Model'),
+                'caption':('Fit Indices: Respecified First-Order Model'),
                 'label':'tab:cfa_fit_impr',
                 'position':'th'}
-notes = '\\multicolumn{2}{p{5.5cm}}{\\textit{Notes.} Fit indices of the Improved model.} \n'
+notes = '\\multicolumn{2}{p{5.5cm}}{\\textit{Notes.} Fit indices of the respecified first-order model.} \n'
 string_size = '\\scriptsize\n'
 
 ### Get latex table and save
@@ -407,10 +435,10 @@ df_mi_nonest_tidy = tidyModInd(df_mi_nonest)
 ## To latex
 ### Prelims
 dict_options = {'column_format':'p{1.6cm}' + 'p{1.35cm}' * df_mi_nonest_tidy.shape[1],
-                'caption':('Modification Indices: Non-Nested Model'),
+                'caption':('Modification Indices: First-Order Model'),
                 'label':'tab:cfa_mi_nonest',
                 'position':'th'}
-notes = '\\multicolumn{5}{p{8.5cm}}{\\textit{Notes.} Modification indices of the non-nested model. The second to last column contains the standardized modification indices, where the factor variances are fixed to one. The last column presents the completely standardized modification indices, where the factor variances are fixed to one and all other parameters are standardized.} \n'
+notes = '\\multicolumn{5}{p{8.5cm}}{\\textit{Notes.} Modification indices of the first-order model. The second to last column contains the standardized modification indices, where the factor variances are fixed to one. The last column presents the completely standardized modification indices, where the factor variances are fixed to one and all other parameters are standardized.} \n'
 string_size = '\\scriptsize\n'
 
 ### Get latex table and save
@@ -426,10 +454,10 @@ df_mi_nest_tidy = tidyModInd(df_mi_nest)
 ## To latex
 ### Prelims
 dict_options = {'column_format':'p{1.6cm}' + 'p{1.35cm}' * df_mi_nest_tidy.shape[1],
-                'caption':('Modification Indices: Nested Model'),
+                'caption':('Modification Indices: Respecified Second-Order Model Model'),
                 'label':'tab:cfa_mi_nest',
                 'position':'th'}
-notes = '\\multicolumn{5}{p{8.5cm}}{\\textit{Notes.} Modification indices of the hypothesized model. The second to last column contains the standardized modification indices, where the factor variances are fixed to one. The last column presents the completely standardized modification indices, where the factor variances are fixed to one and all other parameters are standardized.} \n'
+notes = '\\multicolumn{5}{p{8.5cm}}{\\textit{Notes.} Modification indices of the respecified second-order model. The second to last column contains the standardized modification indices, where the factor variances are fixed to one. The last column presents the completely standardized modification indices, where the factor variances are fixed to one and all other parameters are standardized.} \n'
 string_size = '\\scriptsize\n'
 
 ### Get latex table and save
@@ -445,10 +473,10 @@ df_mi_impr_tidy = tidyModInd(df_mi_impr)
 ## To latex
 ### Prelims
 dict_options = {'column_format':'p{1.6cm}' + 'p{1.35cm}' * df_mi_impr_tidy.shape[1],
-                'caption':('Modification Indices: Improved Model'),
+                'caption':('Modification Indices: Respecified First-Order Model'),
                 'label':'tab:cfa_mi_impr',
                 'position':'th'}
-notes = '\\multicolumn{5}{p{8.5cm}}{\\textit{Notes.} Modification indices of the improved model. The second to last column contains the standardized modification indices, where the factor variances are fixed to one. The last column presents the completely standardized modification indices, where the factor variances are fixed to one and all other parameters are standardized.} \n'
+notes = '\\multicolumn{5}{p{8.5cm}}{\\textit{Notes.} Modification indices of the respecified first-order model. The second to last column contains the standardized modification indices, where the factor variances are fixed to one. The last column presents the completely standardized modification indices, where the factor variances are fixed to one and all other parameters are standardized.} \n'
 string_size = '\\scriptsize\n'
 
 ### Get latex table and save
@@ -456,3 +484,26 @@ latex_mi_impr = table2Latex(df_mi_impr_tidy,dict_options,notes,string_size)
 text_latex_mi_impr = open('Results/CFA_mi_impr.tex', 'w')
 text_latex_mi_impr.write(latex_mi_impr)
 text_latex_mi_impr.close()
+
+#--------------------------------------------
+# Communalities
+#--------------------------------------------
+
+# Improved model
+## Clean the table
+df_r2_impr_tidy = df_r2_impr.rename(columns = {'x':'Communality'}, index = dict_vars)
+
+## To latex
+### Prelims
+dict_options = {'column_format':'p{5cm}' + 'p{1.5cm}' * df_r2_impr_tidy.shape[1],
+                'caption':('Communalities: Respecified First-Order Model'),
+                'label':'tab:cfa_r2_impr',
+                'position':'th'}
+notes = '\\multicolumn{2}{p{6.5cm}}{\\textit{Notes.} Communalities of the respecified first-order model.} \n'
+string_size = '\\scriptsize\n'
+
+### Get latex table and save
+latex_r2_impr = table2Latex(df_r2_impr_tidy,dict_options,notes,string_size)
+text_latex_r2_impr = open('Results/CFA_r2_impr.tex', 'w')
+text_latex_r2_impr.write(latex_r2_impr)
+text_latex_r2_impr.close()

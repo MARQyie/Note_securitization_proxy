@@ -233,31 +233,41 @@ fa_qmo_loadings.to_csv('Results/fa_loadings_quartimin.csv')
     WARNING: The data contains many zeros. The PAF method might not be
     robust enough.
     '''
+#--------------------------------------------
+# Do promax with five
+fa_pm5 = FactorAnalyzer(rotation = 'promax', n_factors = 5, method = 'principal')
+fa_pm5.fit(df_standard)
 
+## Get the factor loadings 
+fa_pm5_loadings = pd.DataFrame(fa_pm5.loadings_,\
+                           columns = range(5),\
+                           index = var_names)
+    
+'''OLD
 #--------------------------------------------
 # Do promax with three
 # First run with three and all variables, then delete badly behaving indicators
-fa_pm2 = FactorAnalyzer(rotation = 'promax', n_factors = 3, method = 'principal')
+fa_pm2 = FactorAnalyzer(rotation = 'promax', n_factors = 2, method = 'principal')
 fa_pm2.fit(df_standard)
 
 ## Get the factor loadings 
 fa_pm2_loadings = pd.DataFrame(fa_pm2.loadings_,\
-                           columns = range(3),\
+                           columns = range(2),\
                            index = var_names)
 
 # Get list with only good behaving indicators
 var_names_good = [var for var in var_names if var not in ['cr_serv_fees', 'hmda_sec_amount',\
-                                                          'cr_ls_income', 'cr_as_nsoth',\
+                                                          'cr_ls_income', \
                                                           'cr_sec_income','cr_as_sbo']]
 # Promax
-fa_pm2 = FactorAnalyzer(rotation = 'promax', n_factors = 3)
+fa_pm2 = FactorAnalyzer(rotation = 'promax', n_factors = 2)
 fa_pm2.fit(df_standard[var_names_good])
 
 ## Get the factor loadings 
 fa_pm2_loadings = pd.DataFrame(fa_pm2.loadings_,\
-                           columns = range(3),\
+                           columns = range(2),\
                            index = var_names_good)
-
+'''
 
 #--------------------------------------------
 # Save loadings to excel
@@ -277,11 +287,11 @@ writer.save()
 #--------------------------------------------
 
 # Rename columns
-fa_pm_loadings.columns = pd.MultiIndex.from_product([['Five Factor Model',],['F1','F2','F3','F4']])
-fa_pm2_loadings.columns = pd.MultiIndex.from_product([['Three Factor Model',],['F1','F2','F3']])
+fa_pm_loadings.columns = pd.MultiIndex.from_product([['Four Factor Model',],['F1','F2','F3','F4']])
+fa_pm5_loadings.columns = pd.MultiIndex.from_product([['Five Factor Model',],['F1','F2','F3','F4','F5']])
 
 # Combine 4 and 2 factor models
-fa_table = pd.concat([fa_pm_loadings,fa_pm2_loadings], axis = 1)
+fa_table = pd.concat([fa_pm_loadings,fa_pm5_loadings], axis = 1)
 
 # rename index
 fa_table.index = var_labels
@@ -294,12 +304,12 @@ fa_table = fa_table.applymap(lambda x: '\\textbf{' + str(x) + '}' if x > .4 else
 fa_table = fa_table.replace('nan', '')
 
 # Prelims
-column_format = 'p{4cm}' + 'p{1cm}' * fa_table.shape[1]
-caption = ('Results Explanatory Factor Analysis: Four Factor Model')
-notes = '\\multicolumn{8}{p{14.2cm}}{{\\textit{Notes.} Factor loadings based on the oblique promax rotation. The explanatory factor models are estimated by a principal factor algorithm implemented by factor analyzer in Python. The principal factor algorithm is more robust to deviations from normal than a standard maximum likelihood algorithm. The first four columns contain the factor loadings from a four factor model with all proxies. The last three columns present the factor loadings of a two factor model which we obtained by deleting all badly behavind indicators and factors. We first ran a three factor model and then deleted the badly behaving indicators. The number of original factors are determined by a parallel analysis. Factor loadings are in boldface if they are greater than 0.4, and in italics if they are between 0.3 and 0.4.}} \n'
+column_format = 'p{3.5cm}' + 'p{.9cm}' * fa_table.shape[1]
+caption = ('Results Explanatory Factor Analysis: Four and Five Factor Models')
+notes = '\\multicolumn{10}{p{15.3cm}}{{\\textit{Notes.} Factor loadings based on the oblique promax rotation. The explanatory factor models are estimated by a principal factor algorithm implemented by FactorAnalyzer in Python. The principal factor algorithm is more robust to deviations from normal than a maximum likelihood algorithm. The first four columns contain the factor loadings from a four factor model with all proxies. The next five columns present the factor loadings of a five factor model. The number of original factors are determined by a parallel analysis and the rule of thumb eigenvalue $>0$. Factor loadings are in boldface if they are greater than 0.4, and in italics if they are between 0.3 and 0.4.}} \n'
 label = 'tab:efa_table'
 position = 'th'
-string_size = '\\scriptsize\n'
+string_size = '\\tiny\n'
 
 # To latex
 fa_table_latex = fa_table.to_latex(column_format = column_format,\

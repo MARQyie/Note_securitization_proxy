@@ -42,8 +42,8 @@ os.chdir(r'D:\RUG\PhD\Materials_papers\01-Note_on_securitization')
 #--------------------------------------------
 
 # Set start and end date
-start = 2007
-end = 2018
+start = 2006
+end = 2018 
 
 # Get the number of cores
 num_cores = mp.cpu_count()
@@ -241,11 +241,26 @@ path_hmda_panel = r'D:/RUG/Data/Data_HMDA/Panel/'
 file_lf = r'hmdpanel17.dta'
 file_lf18 = r'hmdpan2018b.dta' 
 file_lf19 = r'hmdpan2019b.dta'
+file_hmda_0506 = 'LARS.FINAL.{}.DAT.zip'
 file_hmda_0717 = r'hmda_{}_nationwide_originated-records_codes.zip'
 file_hmda_1819 = r'year_{}.csv'
 file_hmda_panel_1819 = r'{}_public_panel_csv.csv'
 
 ## Set d-types and na-vals for HMDA LAR
+col_width_0406 = [4, 10, 1, 1, 1, 1, 5, 1, 5, 2, 3, 7, 1, 1, 4, 1, 1, 1, 1, 1, 1,\
+             1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 7]
+col_names_0406 = ['date','respondent_id', 'agency_code', 'loan_type',\
+             'loan_purpose', 'owner_occupancy', 'loan_amount_000s',\
+             'action_taken', 'msamd', 'state_code', 'county_code',\
+             'census_tract_number', 'applicant_sex', 'co_applicant_sex',\
+             'applicant_income_000s', 'purchaser_type', 'denial_reason_1',\
+             'denial_reason_2', 'denial_reason_3', 'edit_status', 'property_type',\
+             'preapproval', 'applicant_ethnicity', 'co_applicant_ethnicity',\
+             'applicant_race_1', 'applicant_race_2', 'applicant_race_3',\
+             'applicant_race_4', 'applicant_race_5', 'co_applicant_race_1',\
+             'co_applicant_race_2', 'co_applicant_race_3', 'co_applicant_race_4',\
+             'co_applicant_race_5', 'rate_spread', 'hoepa_status', 'lien_status',\
+             'sequence_number']
 dtypes_col_hmda = {'respondent_id':'object','state_code':'str', 'county_code':'str','msamd':'str',\
                    'census_tract_number':'str', 'derived_msa-md':'str'}
 na_values = ['NA   ', 'NA ', '...',' ','NA  ','NA      ','NA     ','NA    ','NA', 'Exempt', 'N/AN/', 'na']
@@ -306,13 +321,18 @@ state_dict = dict(zip(states,statecodes))
 
 def loadCleanHMDA(year):
     #Load the dataframe in a temporary frame
-    if year < 2018:
+    if year < 2007:
+        df_chunk = pd.read_fwf(path_hmda + file_hmda_0506.format(year),\
+                               widths = col_width_0406, names = col_names_0406,\
+                               chunksize = 1e6, na_values = na_values, dtype = dtypes_col_hmda,\
+                               header=None, compression = 'zip')
+    elif year < 2018:
         df_chunk = pd.read_csv(path_hmda + file_hmda_0717.format(year),\
                                index_col = 0, chunksize = 1e6, na_values = na_values,\
                                dtype = dtypes_col_hmda)
         #df_panel = pd.read_csv(path_hmda_panel + file_hmda_panel_1017.format(year))
         #df_panel.rename(columns = {'Respondent RSSD ID':'respondent_rssd',
-        #                           'Parent RSSD ID':'parent_rssd'}, inplace = True)
+        #                           'Parent RSSD ID':'parent_rssd'}, inplace = True)  
     else: # From 2018 onward structure of the data changes
         df_chunk = pd.read_csv(path_hmda + file_hmda_1819.format(year),\
                                index_col = 0, chunksize = 1e6, na_values = na_values,\

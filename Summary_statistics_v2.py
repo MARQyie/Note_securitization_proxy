@@ -135,7 +135,7 @@ def resultsToLatex(results, caption = '', label = '', size_string = '\\scriptsiz
     else:
         function_parameters = dict(na_rep = '',
                                index_names = True,
-                               column_format = 'p{4cm}' + 'p{.6cm}' * results.shape[1],
+                               column_format = 'p{4cm}' + 'p{.5cm}' * results.shape[1],
                                escape = False,
                                multicolumn = True,
                                multicolumn_format = 'c',

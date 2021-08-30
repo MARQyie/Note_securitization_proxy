@@ -43,7 +43,7 @@ os.chdir(r'D:\RUG\PhD\Materials_papers\01-Note_on_securitization')
 
 # Set start and end date
 start = 2006
-end = 2018 
+end = 2019
 
 # Get the number of cores
 num_cores = mp.cpu_count()
@@ -219,6 +219,8 @@ df_cr = df_cr_raw[(df_cr_raw.RSSD9048 == 200) & (df_cr_raw.RSSD9424 != 0)]
 df_cr = df_cr[df_cr.RSSD9210.isin(range(1,57))]
 
 ## Remove all banks with less than 1 billion in total assets
+#st_keep_idrssd = df_cr[(df_cr.index.get_level_values('date') == 2017) & (df_cr.RC2170 >= 1e6)].index.get_level_values('IDRSSD').unique().tolist()
+#df_cr = df_cr[df_cr.index.get_level_values('IDRSSD').isin(lst_keep_idrssd)]
 df_cr = df_cr[df_cr.RC2170 >= 1e6]
 
 #--------------------------------------------
@@ -273,17 +275,17 @@ vars_hmda_panel_1819 = ['lei', 'arid_2017', 'tax_id']
 vars_lf = ['hmprid'] + ['ENTITY{}'.format(str(year)[2:4]) for year in range(start, end)]
 
 # df LF
-df_lf = pd.read_stata(path_lf + file_lf, columns = vars_lf)
+df_lf = pd.read_stata(path_lf + file_lf, columns = vars_lf[:-1])
 df_lf18 = pd.read_stata(path_lf + file_lf18, columns = ['hmprid', 'ENTITY18'])
 df_lf19 = pd.read_stata(path_lf + file_lf19, columns = ['hmprid', 'ENTITY19'])
 
 # Reduce dimensions df_lf
-df_lf.dropna(how = 'all', subset = vars_lf[1:], inplace = True) # drop rows with all na
-df_lf = df_lf[~(df_lf[vars_lf[1:]] == 0.).any(axis = 1)] # Remove ENTITY with value 0.0
+df_lf.dropna(how = 'all', subset = vars_lf[1:-1], inplace = True) # drop rows with all na
+df_lf = df_lf[~(df_lf[vars_lf[1:-1]] == 0.).any(axis = 1)] # Remove ENTITY with value 0.0
 df_lf18 = df_lf18[~(df_lf18['ENTITY18'] == 0.)] 
 df_lf19 = df_lf19[~(df_lf19['ENTITY19'] == 0.)]
 
-df_lf = df_lf[df_lf[vars_lf[1:]].all(axis = 1)] # Drop rows that have different column values (nothing gets deleted: good)
+df_lf = df_lf[df_lf[vars_lf[1:-1]].all(axis = 1)] # Drop rows that have different column values (nothing gets deleted: good)
 
 # Reshape
 lf_reshaped_list = [df_lf.loc[:,df_lf.columns.str.contains('hmprid|{}'.format(str(year).zfill(2)))].dropna().rename(columns = {'ENTITY{}'.format(str(year).zfill(2)):'entity'}) for year in range(start - 2000, end - 2000)]
@@ -346,7 +348,30 @@ def loadCleanHMDA(year):
         # Merge with df_panel and change column names if year is 2018 or 2019
         if year >= 2018:
             ## Merge
-            chunk = chunk.merge(df_panel.loc[:,vars_hmda_panel_1819], how = 'left', on = 'lei')
+            chunk = chunk.merge(df_panel.loc[:,['lei','agency_code','id_2017','arid_2017','tax_id']], how = 'left', on = 'lei')
+            
+            ## Change column names
+            dict_columns = {'derived_msa-md':'msamd',
+                'tract_population':'population',
+                'tract_minority_population_percent':'minority_population',
+                'ffiec_msa_md_median_family_income':'hud_median_family_income',
+                'tract_to_msa_income_percentage':'tract_to_msamd_income',
+                'tract_one_to_four_family_homes':'number_of_1_to_4_family_units',
+                'income':'applicant_income_000s',
+                'applicant_race-1':'applicant_race_1',
+                'applicant_race-2':'applicant_race_2',
+                'applicant_race-3':'applicant_race_3',
+                'applicant_race-4':'applicant_race_4',
+                'applicant_race-5':'applicant_race_5',
+                'co-applicant_race-1':'co_applicant_race_1',
+                'co-applicant_race-2':'co_applicant_race_2',
+                'co-applicant_race-3':'co_applicant_race_3',
+                'co-applicant_race-4':'co_applicant_race_4',
+                'co-applicant_race-5':'co_applicant_race_5',
+                'applicant_ethnicity_observed':'applicant_ethnicity',
+                'co-applicant_ethnicity_observed':'co_applicant_ethnicity',
+                'co-applicant_sex':'co_applicant_sex'}
+            chunk.rename(columns = dict_columns, inplace = True)
                     
             ## Add column of loan amount in thousand USD
             chunk['loan_amount_000s'] = chunk.loan_amount / 1e3

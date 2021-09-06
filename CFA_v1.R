@@ -247,12 +247,13 @@ write.csv(modin_impr_nest, 'Results/CFA_modindices_impr_nest.csv')
 # Robust; 2 factor model
 #----------------------------------------
 model_robust <-  'LS =~ cr_as_nsres + cr_as_nsoth + hmda_gse_amount + hmda_priv_amount + cr_ls_income 
-                          SEC =~ cr_as_rmbs + cr_as_abs + hmda_sec_amount + cr_cds_purchased + cr_trs_purchased + cr_co_purchased + cr_abcp_uc_own + cr_abcp_ce_own + cr_abcp_uc_oth + cr_sec_income + cr_cds_purchased
-                           
-                          hmda_gse_amount ~~ hmda_priv_amount + hmda_sec_amount
-                          hmda_sec_amount ~~ hmda_priv_amount + cr_as_rmbs
-                          cr_as_nsres ~~ hmda_gse_amount + hmda_priv_amount
-                          cr_abcp_uc_own ~~ cr_abcp_ce_own'
+                  SEC =~ cr_as_rmbs + cr_as_abs + hmda_sec_amount + cr_sec_income + cr_cds_purchased + cr_abcp_uc_own + cr_abcp_ce_own + cr_abcp_uc_oth 
+                  CD =~ cr_cds_purchased + cr_trs_purchased + cr_co_purchased
+                  
+                  hmda_gse_amount ~~ hmda_priv_amount + hmda_sec_amount
+                  hmda_sec_amount ~~ hmda_priv_amount + cr_as_rmbs
+                  cr_as_nsres ~~ hmda_gse_amount + hmda_priv_amount
+                  cr_abcp_uc_own ~~ cr_abcp_ce_own'
 
 
 fit_robust <- cfa(model_robust, data = df_log, estimator = 'MLR')

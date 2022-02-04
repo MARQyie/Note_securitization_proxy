@@ -43,7 +43,7 @@ os.chdir(r'D:\RUG\PhD\Materials_papers\01-Note_on_securitization')
 
 # Set start and end date
 start = 2006
-end = 2019
+end = 2018
 
 # Get the number of cores
 num_cores = mp.cpu_count()
@@ -104,7 +104,7 @@ vars_info = ['IDRSSD', 'RSSD9048', 'RSSD9424', 'RSSD9210']
 vars_ri = '|'.join(['IDRSSD','B492','B493','5416'])
 
 ## RC
-vars_rc = '|'.join(['IDRSSD','2170'])
+vars_rc = '|'.join(['IDRSSD','2170','5369','B528'])
 
 ## RC-D
 vars_rcd = '|'.join(['IDRSSD','F654'])
@@ -119,7 +119,9 @@ vars_rcs = '|'.join(['IDRSSD', 'B705', 'B706', 'B707', 'B708',\
                      'B792', 'B793', 'B794', 'B795', 'B796',\
                      'B776', 'B777', 'B778', 'B779', 'B780',\
                      'B781', 'B782','B806','B807','B808','B809',\
-                     'A249','B783','B784','B785','B786','B787','B788','B789'])
+                     'A249','B783','B784','B785','B786','B787',\
+                     'B788','B789','B804','B805','B761','B762',\
+                     'B763','B500','B501','B502'])
 
 ## RC-V
 vars_rcv = '|'.join(['IDRSSD'] + ['J{}'.format(i) for i in range(981, 999 + 1)] +\
@@ -184,10 +186,10 @@ if __name__ == '__main__':
     df_rcv = pd.concat(Parallel(n_jobs=num_cores)(delayed(loadGeneral)(i, file_rcv, vars_rcv) for i in range(2011, end)))
     
 # Concat all dfs
-df_cr_raw = df_info.set_index(['IDRSSD','date']).join([df_ri.set_index(['IDRSSD','date']),\
-                           df_rc.set_index(['IDRSSD','date']),\
-                           df_rcd.set_index(['IDRSSD','date']),\
-                           df_rcl.set_index(['IDRSSD','date']),\
+df_cr_raw = df_info.set_index(['IDRSSD','date']).join([df_ri.set_index(['IDRSSD','date']),
+                           df_rc.set_index(['IDRSSD','date']),
+                           df_rcd.set_index(['IDRSSD','date']),
+                           df_rcl.set_index(['IDRSSD','date']),
                            df_rcs.set_index(['IDRSSD','date'])], how = 'inner')
     
 df_cr_raw = df_cr_raw.merge(df_rcv.set_index(['IDRSSD','date']), how = 'left', left_index = True, right_index = True)
@@ -275,15 +277,19 @@ vars_hmda_panel_1819 = ['lei', 'arid_2017', 'tax_id']
 vars_lf = ['hmprid'] + ['ENTITY{}'.format(str(year)[2:4]) for year in range(start, end)]
 
 # df LF
-df_lf = pd.read_stata(path_lf + file_lf, columns = vars_lf[:-1])
-df_lf18 = pd.read_stata(path_lf + file_lf18, columns = ['hmprid', 'ENTITY18'])
-df_lf19 = pd.read_stata(path_lf + file_lf19, columns = ['hmprid', 'ENTITY19'])
+if end <= 2018:
+    df_lf = pd.read_stata(path_lf + file_lf, columns = vars_lf)
+else: 
+    df_lf = pd.read_stata(path_lf + file_lf, columns = vars_lf[:-1])
+    df_lf18 = pd.read_stata(path_lf + file_lf18, columns = ['hmprid', 'ENTITY18'])
+    df_lf19 = pd.read_stata(path_lf + file_lf19, columns = ['hmprid', 'ENTITY19'])
 
 # Reduce dimensions df_lf
 df_lf.dropna(how = 'all', subset = vars_lf[1:-1], inplace = True) # drop rows with all na
 df_lf = df_lf[~(df_lf[vars_lf[1:-1]] == 0.).any(axis = 1)] # Remove ENTITY with value 0.0
-df_lf18 = df_lf18[~(df_lf18['ENTITY18'] == 0.)] 
-df_lf19 = df_lf19[~(df_lf19['ENTITY19'] == 0.)]
+if end >= 2019:
+    df_lf18 = df_lf18[~(df_lf18['ENTITY18'] == 0.)] 
+    df_lf19 = df_lf19[~(df_lf19['ENTITY19'] == 0.)]
 
 df_lf = df_lf[df_lf[vars_lf[1:-1]].all(axis = 1)] # Drop rows that have different column values (nothing gets deleted: good)
 
@@ -295,11 +301,12 @@ for  i, year in zip(range(len(range(start, end + 1))),range(start, end)):
     lf_reshaped_list[i]['date'] = year
     
 # Add 2018 and 2019
-lf_reshaped_list.append(df_lf18.dropna().rename(columns = {'ENTITY{}'.format(18):'entity'}))
-lf_reshaped_list[-1]['date'] = 2018
-
-lf_reshaped_list.append(df_lf19.dropna().rename(columns = {'ENTITY{}'.format(19):'entity'}))
-lf_reshaped_list[-1]['date'] = 2019
+if end >= 2019:
+    lf_reshaped_list.append(df_lf18.dropna().rename(columns = {'ENTITY{}'.format(18):'entity'}))
+    lf_reshaped_list[-1]['date'] = 2018
+    
+    lf_reshaped_list.append(df_lf19.dropna().rename(columns = {'ENTITY{}'.format(19):'entity'}))
+    lf_reshaped_list[-1]['date'] = 2019
 
 # Make df
 df_lf_reshaped = pd.concat(lf_reshaped_list)
@@ -476,6 +483,9 @@ df['cr_serv_fees'] = df_raw.RIADB492
 # Net securitization income
 df['cr_sec_income'] = df_raw.RIADB493
 
+# Loans available-for-sale
+df['cr_loans_afs'] = df_raw.RC5369
+
 ''' Only for banks with >1billion of trading assets. also includes ABSs etc. 
 # Loans pending securitization
 df['cr_sec_pending'] = df_raw.RCF654
@@ -517,6 +527,7 @@ df['cr_se_off'] = df_raw.RCFDS495
     group the others in a rest category''' 
 df['cr_as_sec'] = df_raw.loc[:,['RCB{}'.format(i) for i in range(705,711+1)]].sum(axis = 1)
 df['cr_as_abs'] = df_raw.loc[:,['RCB{}'.format(i) for i in range(706,711+1)]].sum(axis = 1)
+df['cr_as_abs_oth'] = df_raw.loc[:,['RCB706','RCB709','RCB710','RCB711']].sum(axis = 1) # abs other than rmbs, credit card and auto loans
 df['cr_as_rmbs'] = df_raw.RCB705
 df['cr_as_hel'] = df_raw.RCB706
 df['cr_as_ccr'] = df_raw.RCB707
@@ -524,6 +535,11 @@ df['cr_as_auto'] = df_raw.RCB708
 df['cr_as_ocl'] = df_raw.RCB709
 df['cr_as_cil'] = df_raw.RCB710
 df['cr_as_aol'] = df_raw.RCB711
+
+# Retain (seller's) interests
+df['cr_ret_sec'] = df_raw.loc[:,['RCB{}'.format(i) for i in range(761,763+1)]].sum(axis = 1)
+df['cr_ret_loans'] = df_raw.loc[:,['RCB{}'.format(i) for i in range(500,502+1)]].sum(axis = 1)
+df['cr_ret_tot'] = df['cr_ret_sec'] + df['cr_ret_loans']
 
 # Assets sold and not securitized with recourse
 # Note: split in same categories as cr_as_.... Auto does not have enough variation
@@ -540,6 +556,7 @@ df['cr_as_nsaol'] = df_raw.RCB796
 # Maximum amount of credit exposure provided to other institutions
 df['cr_ce_sec'] = df_raw.loc[:,['RCB{}'.format(i) for i in range(776,782+1)]].sum(axis = 1)
 df['cr_ce_abs'] = df_raw.loc[:,['RCB{}'.format(i) for i in range(777,782+1)]].sum(axis = 1)
+df['cr_ce_abs_oth'] = df_raw.loc[:,['RCB777','RCB780','RCB781','RCB782']].sum(axis = 1) # abs other than rmbs, credit card and auto loans
 df['cr_ce_rmbs'] = df_raw.RCB776
 df['cr_ce_hel'] = df_raw.RCB777
 df['cr_ce_ccr'] = df_raw.RCB778
@@ -551,7 +568,15 @@ df['cr_ce_aol'] = df_raw.RCB782
 # Unused Commitments provided to other institutions securitization activities
 df['cr_uc_sec'] = df_raw.loc[:,['RCB{}'.format(i) for i in range(783,789+1)]].sum(axis = 1)
 df['cr_uc_abs'] = df_raw.loc[:,['RCB{}'.format(i) for i in range(784,789+1)]].sum(axis = 1)
+df['cr_uc_abs_oth'] = df_raw.loc[:,['RCB784','RCB787','RCB788','RCB789']].sum(axis = 1) # abs other than rmbs, credit card and auto loans
 df['cr_uc_rmbs'] = df_raw.RCB783
+df['cr_uc_ccr'] = df_raw.RCB778
+df['cr_uc_auto'] = df_raw.RCB779
+
+# Outstanding principle balance of assets serviced for others
+df['cr_ser_oth_rec'] = df_raw.RCB804
+df['cr_ser_oth_norec'] = df_raw.RCB805
+df['cr_ser_oth'] = df_raw.loc[:,['RCB804','RCB805']].sum(axis = 1)
 
 # Outstanding principle balance small business obligations transferred with recourse
 df['cr_as_sbo'] = df_raw.RCA249
@@ -568,8 +593,6 @@ df['cr_abcp_uc_oth'] = df_raw.RCB809
 
 
 # Total Assets Securitization Vehicles
-# NOTE: We only use the total assets of the securitization vehicles, because there is no
-# straight-forward variable measuring outstanding ABSs/CDOs. These vehicles can be both
 # ABS SPVs or CDO SPVs (or anything similar but not ABCP conduits/SIV)
 vars_secveh = ['RCJ{}'.format(i) for i in range(981,999+1,3)] +\
               ['RCK{}'.format(str(i).zfill(3)) for i in range(3,12+1,3)]
@@ -595,6 +618,9 @@ df['cr_ta_vie_other'] = df_raw.loc[:,vars_vie_other].sum(axis = 1)
 
 # Total assets
 df['ta'] = df_raw.RC2170
+
+# Total loans
+df['total_loans'] = df_raw[['RC5369','RCB528']].sum(axis = 1)
 
 #--------------------------------------------
 # Fill NA
@@ -634,10 +660,30 @@ df.drop(columns = 'cr_abcp_repo', inplace = True)
     
 ## Remove outliers
 df = df.loc[df.cr_serv_fees != df.cr_serv_fees.min(),:]
+df = df.loc[df.cr_as_sbo < 1.25e6,:]
+df = df.loc[df.hmda_sec_amount < 1.4e8,:]
 
 #--------------------------------------------
 # Save Data
 #--------------------------------------------
 
 df.to_csv('Data\df_sec_note.csv')
-df[df.date > 2010].to_csv('Data\df_sec_note_20112017.csv')
+df[(df.date > 2010) & (df.cr_secveh_ta >= 0)].to_csv('Data\df_sec_note_20112017.csv')
+
+# Wide data
+df['date'] = df.date.astype(str)
+df_wide = df.pivot(index = 'IDRSSD', columns = 'date', values = df.columns[2:])
+df_wide.columns = [''.join(col).strip() for col in df_wide.columns.values] # rename columns
+df_wide = df_wide - df_wide.min() # subtract the minimum (useful for R)
+df_wide.to_csv('Data\df_sec_note_wide.csv')
+
+# Balanced wide data 2011-2017
+df_20112017 = df[(df.date > 2010) & (df.cr_secveh_ta >= 0)]
+df_grouped = df_20112017.groupby('IDRSSD')
+ids_balanced = df_grouped.IDRSSD.count()[df_grouped.IDRSSD.count() == 7].index
+df_balanced = df_20112017[df_20112017.IDRSSD.isin(ids_balanced)]
+df_balanced_wide = df_balanced.pivot(index = 'IDRSSD', columns = 'date', values = df_20112017.columns[2:])
+df_balanced_wide.columns = [''.join(col).strip() for col in df_balanced_wide.columns.values] # rename columns
+df_balanced_wide = df_balanced_wide - df_balanced_wide.min() # subtract the minimum (useful for R)
+df_wide.to_csv('Data\df_sec_note_wide.csv')
+df_balanced_wide.to_csv('Data\df_sec_note_balanced_wide.csv')

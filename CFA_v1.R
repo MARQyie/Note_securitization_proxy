@@ -1,7 +1,7 @@
 # ---------------------------------------
 # Confirmatory factor analysis for WP3a
 # Mark van der Plaat
-# March 2021
+# September 2021
 #----------------------------------------
 
 # This scrupt performs a confirmatory factor 
@@ -161,7 +161,7 @@ write.csv(modin_nest, 'Results/CFA_modindices_nest.csv')
 # ---------------------------------------
 # Improved model
 #----------------------------------------
-model_improved <-  'LS =~ cr_as_nsres + cr_as_nsoth + hmda_gse_amount + hmda_priv_amount + cr_ls_income 
+model_improved <-  'LS =~ cr_as_nsres + cr_as_nsoth + hmda_gse_amount + hmda_priv_amount + cr_ls_income
                     ABSCDO =~ cr_as_rmbs + cr_as_abs + hmda_sec_amount + cr_sec_income + cr_cds_purchased
                     CD =~ cr_cds_purchased + cr_trs_purchased + cr_co_purchased
                     ABCP =~ cr_abcp_uc_own + cr_abcp_ce_own + cr_abcp_uc_oth + cr_sec_income + cr_cds_purchased
@@ -242,12 +242,11 @@ write.csv(fitmeasures_impr_nest, 'Results/CFA_fitmeasures_impr_nest.csv')
 modin_impr_nest <- modindices(fit_impr_nest, sort = TRUE, maximum.number = 25)
 write.csv(modin_impr_nest, 'Results/CFA_modindices_impr_nest.csv')
 
-
 # ---------------------------------------
-# Robust; 2 factor model
+# One sec factor 
 #----------------------------------------
-model_robust <-  'LS =~ cr_as_nsres + cr_as_nsoth + hmda_gse_amount + hmda_priv_amount + cr_ls_income 
-                  SEC =~ cr_as_rmbs + cr_as_abs + hmda_sec_amount + cr_sec_income + cr_cds_purchased + cr_abcp_uc_own + cr_abcp_ce_own + cr_abcp_uc_oth 
+model_onesec <-  'LS =~ cr_as_nsres + cr_as_nsoth + hmda_gse_amount + hmda_priv_amount + cr_ls_income 
+                  SEC =~ cr_as_rmbs + cr_as_abs + hmda_sec_amount + cr_abcp_uc_own + cr_abcp_ce_own + cr_abcp_uc_oth + cr_sec_income + cr_cds_purchased
                   CD =~ cr_cds_purchased + cr_trs_purchased + cr_co_purchased
                   
                   hmda_gse_amount ~~ hmda_priv_amount + hmda_sec_amount
@@ -255,6 +254,35 @@ model_robust <-  'LS =~ cr_as_nsres + cr_as_nsoth + hmda_gse_amount + hmda_priv_
                   cr_as_nsres ~~ hmda_gse_amount + hmda_priv_amount
                   cr_abcp_uc_own ~~ cr_abcp_ce_own'
 
+fit_onesec <- cfa(model_onesec, data = df_log, estimator = 'MLR')
+summary(fit_onesec, fit.measures=TRUE, standardized = TRUE, rsquare = TRUE)
 
-fit_robust <- cfa(model_robust, data = df_log, estimator = 'MLR')
-summary(fit_robust, fit.measures=TRUE, standardized = TRUE)
+#Save results
+## Parameter estimates
+params_onesec <- parameterEstimates(fit_onesec, standardized = TRUE)
+write.csv(params_onesec, 'Results/CFA_params_onesec.csv')
+
+## Model implied covariance matrix
+fitted_onesec <- fitted(fit_onesec)$cov
+write.csv(fitted_onesec, 'Results/CFA_modimplied_cov_onesec.csv')
+
+## Residual covariance matrix
+resid_onesec <- lavResiduals(fit_onesec)$cov
+resid_std_onesec <- lavResiduals(fit_onesec)$cov.z
+write.csv(resid_onesec, 'Results/CFA_rescov_onesec.csv')
+write.csv(resid_std_onesec, 'Results/CFA_rescov_standard_onesec.csv')
+
+## Fit measures
+fitmeasures_onesec <- fitMeasures(fit_onesec, output = 'matrix')
+write.csv(fitmeasures_onesec, 'Results/CFA_fitmeasures_onesec.csv')
+
+## Modindices
+modin_onesec <- modindices(fit_onesec, sort = TRUE, maximum.number = 25)
+write.csv(modin_onesec, 'Results/CFA_modindices_onesec.csv')
+
+## R-square
+r2_onesec <- inspect(fit_onesec, 'r2', output = 'matrix')
+write.csv(r2_onesec, 'Results/CFA_r2_onesec.csv')
+
+
+

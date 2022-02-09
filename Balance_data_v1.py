@@ -72,8 +72,46 @@ ids_quant_ta99 = mean_ta[mean_ta < mean_ta.quantile(.99)].index
 dum_ta99 = [1 if row['IDRSSD'] in ids_quant_ta99 else 0 for i, row in df_balanced.iterrows()]
 df_balanced['dum_ta99'] = dum_ta99
 
+# Add dummy that equals one when a bank has at least 3 non-zero values for all proxies
+# Set var names
+var_names = ['cr_as_sbo','cr_as_rmbs','cr_as_abs','hmda_sec_amount',
+            'cr_secveh_ta','cr_sec_income','cr_serv_fees','cr_cds_purchased',
+            'cr_abcp_ta','cr_abcp_uc_own','cr_abcp_ce_own', 'cr_abcp_uc_oth']
+
+# Determine non-zero values per bank and per columns
+nonzeroes_idrssd = df_balanced.groupby('IDRSSD')[var_names].agg(lambda x: x.ne(0).sum())
+nonzeroes_date = df_balanced.groupby('date')[var_names].agg(lambda x: x.ne(0).sum())
+
+nonzeroes_idrssd.to_csv('Data/df_nonzeroes_idrssd.csv')
+nonzeroes_date.to_csv('Data/df_nonzeroes_date.csv')
+
+# -----------------------------------
+# Aggregate data per year
+# -----------------------------------
+
+# Unweighted aggregated data
+df_agg = df_balanced.groupby('IDRSSD').sum()
+
+# Check some statistics
+means_agg = df_agg.mean()
+vars_agg = df_agg.var()
+groupbydata_agg = df_agg.groupby('date')[var_names].agg(lambda x: x.ne(0).sum())
+
+# Weighted aggregated data
+# NOTE weights are: TA_i / sum_i TA_i * n
+df_agg_weighted = df_agg.multiply(df_agg.ta / df_agg.ta.sum() * df_agg.shape[0], axis = 0)
+# Run to check the sum of the weights: (df_agg.ta / df_agg.ta.sum()).sum()
+
+# Drop columns in df_agg and df_agg_weighted
+df_agg.drop(columns = ['date','ta','percentiles_4','percentiles_5','percentiles_6','dum_ta95','dum_ta99'],
+            inplace = True)
+df_agg_weighted.drop(columns = ['date','ta','percentiles_4','percentiles_5','percentiles_6','dum_ta95','dum_ta99'],
+            inplace = True)
+
 # -----------------------------------
 # Save DataFrame
 # -----------------------------------
 
 df_balanced.to_csv('Data/df_sec_note_20112017_balanced.csv')
+df_agg.to_csv('Data/df_sec_note_20112017_balanced_agg.csv')
+df_agg_weighted.to_csv('Data/df_sec_note_20112017_balanced_agg_weighted.csv')

@@ -42,6 +42,16 @@ df_agg_w$cr_sec_income <- df_agg_w$cr_sec_income - min(df_agg_w$cr_sec_income)
 
 df_agg_w_log <- log(df_agg_w + 1)
 
+file <- 'Data/df_sec_note_20112017_balanced_agg_ta.csv'
+df_ta <- read.csv(file)
+
+# Log-transform
+df_ta$cr_serv_fees <- df_ta$cr_serv_fees - min(df_ta$cr_serv_fees)
+df_ta$cr_ls_income <- df_ta$cr_ls_income - min(df_ta$cr_ls_income)
+df_ta$cr_sec_income <- df_ta$cr_sec_income - min(df_ta$cr_sec_income)
+
+df_ta_log <- log(df_ta * 1000 + 1)
+
 # ---------------------------------------
 # Two-factor theory model (aggregated
 #----------------------------------------
@@ -118,3 +128,12 @@ write.csv(r2, 'Results/CFA_r2_theory_balanced_agg_weighted.csv')
 ## Reliability
 rel <- reliability(fit, return.total = TRUE)
 write.csv(rel, 'Results/CFA_reliability_theory_balanced_agg_weighted.csv')
+
+# ---------------------------------------
+# Two-factor theory model (aggregated weighted by TA)
+#----------------------------------------
+
+# Set functional form model
+# Fit model
+fit <- cfa(model, data = df_ta_log, estimator = 'MLR')
+summary(fit, fit.measures=TRUE, standardized = TRUE, rsquare = TRUE)

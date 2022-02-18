@@ -102,10 +102,15 @@ groupbydata_agg = df_agg.groupby('date')[var_names].agg(lambda x: x.ne(0).sum())
 df_agg_weighted = df_agg.multiply(df_agg.ta / df_agg.ta.sum() * df_agg.shape[0], axis = 0)
 # Run to check the sum of the weights: (df_agg.ta / df_agg.ta.sum()).sum()
 
+# Scale balanced with TA_i
+df_agg_ta = df_agg.divide(df_agg.ta, axis = 0)
+
 # Drop columns in df_agg and df_agg_weighted
 df_agg.drop(columns = ['date','ta','percentiles_4','percentiles_5','percentiles_6','dum_ta95','dum_ta99'],
             inplace = True)
 df_agg_weighted.drop(columns = ['date','ta','percentiles_4','percentiles_5','percentiles_6','dum_ta95','dum_ta99'],
+            inplace = True)
+df_agg_ta.drop(columns = ['date','ta','percentiles_4','percentiles_5','percentiles_6','dum_ta95','dum_ta99'],
             inplace = True)
 
 # -----------------------------------
@@ -115,3 +120,4 @@ df_agg_weighted.drop(columns = ['date','ta','percentiles_4','percentiles_5','per
 df_balanced.to_csv('Data/df_sec_note_20112017_balanced.csv')
 df_agg.to_csv('Data/df_sec_note_20112017_balanced_agg.csv')
 df_agg_weighted.to_csv('Data/df_sec_note_20112017_balanced_agg_weighted.csv')
+df_agg_ta.to_csv('Data/df_sec_note_20112017_balanced_agg_ta.csv')

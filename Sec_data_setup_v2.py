@@ -670,6 +670,11 @@ df = df.loc[df.hmda_sec_amount < 1.4e8,:]
 df.to_csv('Data\df_sec_note.csv')
 df[(df.date > 2010) & (df.cr_secveh_ta >= 0)].to_csv('Data\df_sec_note_20112017.csv')
 
+# Aggregated data
+df_agg = df.set_index(['IDRSSD','date'])
+df_agg = df_agg.groupby(level = 'IDRSSD').sum()
+df_agg.to_csv('Data/df_sec_note_20112017_agg.csv')
+
 # Wide data
 df['date'] = df.date.astype(str)
 df_wide = df.pivot(index = 'IDRSSD', columns = 'date', values = df.columns[2:])

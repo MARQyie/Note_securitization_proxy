@@ -54,6 +54,9 @@ def heatmap(matrix, file, annot=True):
 
 # Function to make the parameter estimate table pretty
 def tidyParamEst(data):
+    # Remove constants (~1) and scaling factors (~*~)
+    data = data[~data.op.isin(['~1', '~*~'])]
+
     # Select columns
     data_clean = data.iloc[:, [3, 4, 6, 10]]
 
@@ -85,6 +88,8 @@ def tidyParamEst(data):
         else:
             if row['lhs'] == row['rhs']:
                 index_lst.append(['Variance ($\delta$)', str(var_dict[row['lhs']]), np.nan])
+            elif row['rhs'] == 't1':
+                index_lst.append(['Threshold', str(var_dict[row['lhs']]), np.nan])
             else:
                 index_lst.append(['Covariance ($\delta$)', str(var_dict[row['lhs']]), str(var_dict[row['rhs']])])
             # index_lst.append('$\delta_{' + str(var_dict[row['lhs']]) + ',' +  str(var_dict[row['rhs']]) +'}$')
@@ -126,6 +131,10 @@ def table2Latex(data, options, notes, string_size):
             abs_fit = '& \\\\ \n \\multicolumn{2}{l}{\\textbf{Absolute fit}} \\\\ \n'
             location = latex_table.find('$\chi^2$')
             latex_table = latex_table[:location] + abs_fit + latex_table[location:]
+        elif 'Scaled $\chi^2$' in data.index:
+            abs_fit = '& \\\\ \n \\multicolumn{2}{l}{\\textbf{Absolute fit}} \\\\ \n'
+            location = latex_table.find('Scaled $\chi^2$')
+            latex_table = latex_table[:location] + abs_fit + latex_table[location:]
         else:
             abs_fit = '& \\\\ \n \\multicolumn{2}{l}{\\textbf{Absolute fit}} \\\\ \n'
             location = latex_table.find('Yuan--Bentler $\chi^2$')
@@ -148,7 +157,7 @@ def table2Latex(data, options, notes, string_size):
             latex_table = latex_table[:location] + oth_fit + latex_table[location:]
 
     # Insert multicolumns for the parameter estimates for two-factor model
-    if (data.index[0][0] == 'F1') and (data.index[-1][0] != 'F3'):
+    if (data.index[0][0] == 'F1') and (data.index[-1][1] == 'F2'):
         # Factor loadings
         factor_loadings = ' \n \\multicolumn{6}{l}{\\textbf{Factor loadings}} \\\\ \n'
         location = latex_table.find('F1')
@@ -159,15 +168,37 @@ def table2Latex(data, options, notes, string_size):
         location = latex_table.find('Un. Com. Own ABCP Conduits & Un. Com. Other ABCP Conduits')
         latex_table = latex_table[:location] + error_cov + latex_table[location:]
 
-        # Unique variances
-        if data.index.get_level_values(0).str.contains('F3').any():
-            unique_var = '\n&&&&& \\\\ \n \\multicolumn{6}{l}{\\textbf{Unique variances}} \\\\'
-            location = latex_table.find('\nSec. Residential Loans &')
-            latex_table = latex_table[:location] + unique_var + latex_table[location:]
-        else:
-            unique_var = '\n&&&&& \\\\ \n \\multicolumn{6}{l}{\\textbf{Unique variances}} \\\\'
+        # Thresholds
+        if 'Small Bus. Obl. Transf.' in data.index.get_level_values(0):
+            unique_var = '\n&&&&& \\\\ \n \\multicolumn{6}{l}{\\textbf{Thresholds}} \\\\'
             location = latex_table.find('\nSmall Bus. Obl. Transf. &')
             latex_table = latex_table[:location] + unique_var + latex_table[location:]
+
+            # Unique variances
+            unique_var = '\n&&&&& \\\\ \n \\multicolumn{6}{l}{\\textbf{Unique variances}} \\\\'
+            location = latex_table.replace('Small Bus. Obl. Transf.', 'X' * len('Small Bus. Obl. Transf.'), 2).find(
+                '\nSmall Bus. Obl. Transf. &')
+            latex_table = latex_table[:location] + unique_var + latex_table[location:]
+        else:
+            unique_var = '\n&&&&& \\\\ \n \\multicolumn{6}{l}{\\textbf{Thresholds}} \\\\'
+            location = latex_table.find('\nSec. Residential Loans &')
+            latex_table = latex_table[:location] + unique_var + latex_table[location:]
+
+            # Unique variances
+            unique_var = '\n&&&&& \\\\ \n \\multicolumn{6}{l}{\\textbf{Unique variances}} \\\\'
+            location = latex_table.replace('Sec. Residential Loans', 'X' * len('Sec. Residential Loans'), 2).find(
+                '\nSec. Residential Loans &')
+            latex_table = latex_table[:location] + unique_var + latex_table[location:]
+
+        # # Unique variances
+        # if data.index.get_level_values(0).str.contains('F3').any():
+        #     unique_var = '\n&&&&& \\\\ \n \\multicolumn{6}{l}{\\textbf{Unique variances}} \\\\'
+        #     location = latex_table.find('\nSec. Residential Loans &')
+        #     latex_table = latex_table[:location] + unique_var + latex_table[location:]
+        # else:
+        #     unique_var = '\n&&&&& \\\\ \n \\multicolumn{6}{l}{\\textbf{Unique variances}} \\\\'
+        #     location = latex_table.find('\nSmall Bus. Obl. Transf. &')
+        #     latex_table = latex_table[:location] + unique_var + latex_table[location:]
 
         # Factor variances
         fac_var = '&&&&& \\\\ \n \\multicolumn{6}{l}{\\textbf{Factor variances}} \\\\ \n'
@@ -180,7 +211,7 @@ def table2Latex(data, options, notes, string_size):
         latex_table = latex_table[:location] + fac_cov + latex_table[location:]
 
     # Insert multicolumns for the parameter estimates for one-factor model
-    if data.index[-1][0] == 'F3':
+    if data.index[-1][0] == 'F1' and (data.index[-1][1] != 'F2'):
         # Factor loadings
         factor_loadings = ' \n \\multicolumn{6}{l}{\\textbf{Factor loadings}} \\\\ \n'
         location = latex_table.find('F1')
@@ -191,26 +222,31 @@ def table2Latex(data, options, notes, string_size):
         location = latex_table.find('\nUn. Com. Own ABCP Conduits & Un. Com. Other ABCP Conduits')
         latex_table = latex_table[:location] + error_cov + latex_table[location:]
 
+        # Thresholds
+        unique_var = '\n&&&&& \\\\ \n \\multicolumn{6}{l}{\\textbf{Thresholds}} \\\\'
+        location = latex_table.find('\nSec. Residential Loans &')
+        latex_table = latex_table[:location] + unique_var + latex_table[location:]
+
         # Unique variances
         unique_var = '\n&&&&& \\\\ \n \\multicolumn{6}{l}{\\textbf{Unique variances}} \\\\'
-        location = latex_table.find('\nSmall Bus. Obl. Transf. &')
+        location = latex_table.replace('Sec. Residential Loans', 'X'* len('Sec. Residential Loans'), 2).find('\nSec. Residential Loans &')
         latex_table = latex_table[:location] + unique_var + latex_table[location:]
 
         # Factor variances
-        fac_var = '&&&&& \\\\ \n \\multicolumn{6}{l}{\\textbf{Factor variances}} \\\\ \n'
-        location = latex_table.replace('F1', 'XX', 2).find('F1')
+        fac_var = '&&&&& \\\\ \n \\multicolumn{6}{l}{\\textbf{Factor variance}} \\\\ \n'
+        location = latex_table.replace('F1', 'XX', 1).find('F1')
         latex_table = latex_table[:location] + fac_var + latex_table[location:]
 
         # Insert multi columns in the communality table
-    if data.columns[-1] == 'Source':
+    if data.columns[-1] == 'Unique Variance':
         # ABS sec
         col = ' \\multicolumn{3}{l}{\\textbf{Loading only on F1}} \\\\ \n'
-        location = latex_table.find('Small Bus. Obl. Transf.')
+        location = latex_table.find('Sec. Residential Loans')
         latex_table = latex_table[:location] + col + latex_table[location:]
 
         # Both factors
         col = '&&&\\\\ \n \\multicolumn{3}{l}{\\textbf{Loading on both F1 and F2}} \\\\ \n'
-        location = latex_table.find('Sec. Income')
+        location = latex_table.find('CDSs Purchased')
         latex_table = latex_table[:location] + col + latex_table[location:]
 
         # ABCP factors
@@ -223,20 +259,28 @@ def table2Latex(data, options, notes, string_size):
 
 def tidyFitInd(data):
     # Get indices
-    lst_fi = ['npar', 'df', 'baseline.df', 'chisq.scaled',
-              'pvalue.scaled','srmr', 'rmsea.robust',
-              'rni.robust', 'cfi.robust', 'tli.robust', 'aic', 'bic']
+    if not data.loc['rmsea.robust',:].isnull().all():
+        lst_fi = ['npar', 'df', 'baseline.df', 'chisq.scaled',
+                  'pvalue.scaled','srmr', 'rmsea.robust',
+                  'cfi.robust', 'tli.robust', 'aic', 'bic']
+        lst_fi_labels = ['No. Params', 'DoF', 'DoF baseline', 'Yuan--Bentler $\chi^2$',
+                         'p-val Yuan--Bentler $\chi^2$', 'SRMR', 'RMSEA',
+                         'CFI', 'TLI',
+                         'AIC', 'BIC']
+    else:
+        lst_fi = ['npar', 'df', 'baseline.df', 'chisq.scaled',
+                  'pvalue.scaled', 'srmr', 'rmsea.scaled',
+                  'cfi.scaled', 'tli.scaled', 'aic', 'bic']
+        lst_fi_labels = ['No. Params', 'DoF', 'DoF baseline', 'Scaled $\chi^2$',
+                         'p-val Scaled $\chi^2$', 'SRMR', 'RMSEA',
+                         'CFI', 'TLI',
+                         'AIC', 'BIC']
 
     if not('aic' in data.index and 'bic' in data.index):
         lst_fi = lst_fi[:-2]
     data_clean = data.loc[lst_fi, :]
 
     # Rename index
-    lst_fi_labels = ['No. Params', 'DoF', 'DoF baseline','Yuan--Bentler $\chi^2$',
-                     'p-val Yuan--Bentler $\chi^2$', 'SRMR', 'RMSEA',
-                     'RNI', 'CFI', 'TLI',
-                     'AIC', 'BIC']
-
     if not('aic' in data.index and 'bic' in data.index):
         lst_fi_labels = lst_fi_labels[:-2]
 
@@ -265,25 +309,21 @@ def pivotTableMI(data, value = 'mi'):
     # Only for two factor models
     var_names = list(getVarDict().keys())
 
+    # Remove flow variables
+    var_names = [var for var in var_names if var not in ['cr_sec_income', 'cr_serv_fees']]
+
     if data_pivot.columns.str.contains('ABSCDO|ABCP').any() and not data_pivot.columns.str.contains('LS').any():
         data_load = data_pivot.iloc[:,:2]
         data_cov = data_pivot.iloc[:,2:]
 
         # Sort index/columns tables
-        if data_cov.shape[0] == 12:
-            try:
-                data_load = data_load.loc[var_names, :]
-                data_cov = data_cov.loc[var_names[1:], var_names[:-1]]
-            except:
-                var_names = [name for name in var_names if
-                         name not in ['cr_cds_purchased']] + ['cr_cds_purchased']
-                data_load = data_load.loc[var_names, :]
-                data_cov = data_cov.loc[var_names[1:], var_names[:-1]]
-        else:
-            var_names = [name for name in var_names if
-                         name not in ['cr_as_sbo', 'hmda_sec_amount', 'cr_cds_purchased']] + ['cr_cds_purchased']
+        # TODO fix the if else statements
+        if data_cov.shape[0] == 10:
             data_load = data_load.loc[var_names, :]
             data_cov = data_cov.loc[var_names[1:], var_names[:-1]]
+        else:
+            data_load = data_load.loc[var_names[1:], :]
+            data_cov = data_cov.loc[var_names[2:], var_names[1:-1]]
 
         # Remove index and column names
         data_load.index.name = None
@@ -312,7 +352,7 @@ def pivotTableMI(data, value = 'mi'):
         data_cov = data_pivot
 
         # Sort index/columns
-        data_cov = data_cov.loc[var_names[1:], var_names[:-1]]
+        data_cov = data_cov.loc[var_names[2:], var_names[1:-1]]
 
         # Remove index and column names
         data_cov.index.name = None

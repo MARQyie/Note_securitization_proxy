@@ -48,22 +48,36 @@ dict_vars.update({'LS': 'Loan Sales',
 # fit indices 
 df_fi_dls = pd.read_csv('Results/CFA_fitmeasures_theory_DLS.csv', index_col=0)
 df_fi_uls = pd.read_csv('Results/CFA_fitmeasures_theory_ULS.csv', index_col=0)
+df_fi_wls = pd.read_csv('Results/CFA_fitmeasures_theory_WLS.csv', index_col=0)
+df_fi_bayes = pd.read_csv('Results/CFA_fitmeasures_bayes.csv', index_col=0)
+
+df_fi_bwlsmv = pd.read_csv('Results/CFA_fitmeasures_binary_WLSMV.csv', index_col=0)
+df_fi_bdwls = pd.read_csv('Results/CFA_fitmeasures_binary_DWLS.csv', index_col=0)
 
 # Parameter estimates
 df_params_dls = pd.read_csv('Results/CFA_params_theory_DLS.csv', index_col=0)
 df_params_uls = pd.read_csv('Results/CFA_params_theory_ULS.csv', index_col=0)
+df_params_wls = pd.read_csv('Results/CFA_params_theory_WLS.csv', index_col=0)
+df_params_bayes = pd.read_csv('Results/CFA_params_bayes.csv', index_col=0)
+
+df_params_bwlsmv = pd.read_csv('Results/CFA_params_binary_WLSMV.csv', index_col=0)
+df_params_bdwls = pd.read_csv('Results/CFA_params_binary_DWLS.csv', index_col=0)
 
 # Communalities
 df_r2_dls = pd.read_csv('Results/CFA_r2_theory_DLS.csv', index_col=0)
 df_r2_uls = pd.read_csv('Results/CFA_r2_theory_ULS.csv', index_col=0)
+df_r2_wls = pd.read_csv('Results/CFA_r2_theory_WLS.csv', index_col=0)
+df_r2_bayes = pd.read_csv('Results/CFA_r2_bayes.csv', index_col=0)
+
+df_r2_bwlsmv = pd.read_csv('Results/CFA_r2_binary_WLSMV.csv', index_col=0)
+df_r2_bdwls = pd.read_csv('Results/CFA_r2_binary_DWLS.csv', index_col=0)
 
 # --------------------------------------------
 # fit indices 
 # --------------------------------------------
 
-# All estimators
-## Get tidy table
-df_fi = pd.concat([df_fi_dls, df_fi_uls], axis=1)
+# All estimators (not bayesian)
+df_fi = pd.concat([df_fi_uls, df_fi_wls, df_fi_dls], axis=1)
 
 lst_fi = ['npar', 'df', 'baseline.df', 'chisq',
           'chisq.scaled','pvalue.scaled',
@@ -78,8 +92,8 @@ lst_fi_labels = ['No. Params', 'DoF', 'DoF baseline',
                  'CFI (robust)', 'TLI (robust)']
 df_fi_tidy = df_fi.loc[lst_fi, :]
 df_fi_tidy.index = lst_fi_labels
-df_fi_tidy.columns = ['DLS','ULS']
-df_fi_tidy.iloc[[3,7,9,11,12],0] = np.nan
+df_fi_tidy.columns = ['ULS', 'WLS', 'DLS']
+df_fi_tidy.iloc[[3,7,9,11,12],-1] = np.nan
 
 ## To latex
 ### Prelims
@@ -87,7 +101,7 @@ dict_options = {'column_format': 'p{3cm}' + 'p{1.5cm}' * df_fi_tidy.shape[1],
                 'caption': ('Fit Indices: Other Robust Estimation Procedures'),
                 'label': 'tab:cfa_fit_robust',
                 'position': 'th'}
-notes = '\\multicolumn{4}{p{9cm}}{\\textit{Notes.} Fit indices of the two-factor models. The first column contains the fit indices for the theory-based model estimated with distributionally-weighted least-squares and the second column contains the same model estimated with unweighted least-squares.} \n'
+notes = '\\multicolumn{4}{p{9cm}}{\\textit{Notes.} Fit indices of the two-factor models. ULS is Unweighted Least Squares, WLS is Weighted Least Squares, and DLS is Distributionally-Weighted Least Squares.} \n'
 string_size = '\\scriptsize\n'
 
 ### Get latex table and save
@@ -96,31 +110,60 @@ text_latex_latex_fi_2f = open('Results/CFA_fi_robust.tex', 'w')
 text_latex_latex_fi_2f.write(latex_fi_2f)
 text_latex_latex_fi_2f.close()
 
+# Binary fit indices
+df_fi = pd.concat([df_fi_bdwls, df_fi_bwlsmv], axis=1)
+
+lst_fi = ['npar', 'df', 'baseline.df', 'chisq',
+          'srmr','rmsea','rni', 'cfi','tli']
+lst_fi_labels = ['No. Params', 'DoF', 'DoF baseline',
+                 '$\chi^2$', 'SRMR', 'RMSEA',
+                 'RNI', 'CFI', 'TLI']
+df_fi_tidy = df_fi.loc[lst_fi, :]
+df_fi_tidy.index = lst_fi_labels
+df_fi_tidy.columns = ['DWLS','WLSMV']
+
+## To latex
+### Prelims
+dict_options = {'column_format': 'p{3cm}' + 'p{1.5cm}' * df_fi_tidy.shape[1],
+                'caption': ('Fit Indices: Binary Two-Factor Theory-Based Model'),
+                'label': 'tab:cfa_fit_binary',
+                'position': 'th'}
+notes = '\\multicolumn{3}{p{9cm}}{\\textit{Notes.} Fit indices of the binary two-factor theory-based model. DWLS is diagonally-weighted Least Squares and WLSMV is a Weighted-Least Squares with robust standard errors and a mean- and variance adjusted test statistic.} \n'
+string_size = '\\scriptsize\n'
+
+### Get latex table and save
+latex_fi_2f = table2Latex(df_fi_tidy, dict_options, notes, string_size)
+text_latex_latex_fi_2f = open('Results/CFA_fi_binary.tex', 'w')
+text_latex_latex_fi_2f.write(latex_fi_2f)
+text_latex_latex_fi_2f.close()
+
 # --------------------------------------------
 # Parameter estimates 
 # --------------------------------------------
 
-# One securitization factor
-## Get tidy table
-df_params_dls_tidy = tidyParamEst(df_params_dls)
-df_params_uls_tidy = tidyParamEst(df_params_uls)
-df_params_tidy = pd.concat([df_params_dls_tidy.iloc[:,[0,2]],
-                            df_params_uls_tidy.iloc[:,[0,2]]], axis=1)
+# All continuous models
+lst_df_params =[tidyParamEst(params).iloc[:,[0,2,3]] for params in [df_params_uls ,df_params_wls,df_params_dls]]
+lst_bayes_params = df_params_bayes.loc[df_params_bayes.op.isin(['=~','~~']),['est','ci.lower','ci.upper','std.all']]
+lst_bayes_params.index = lst_df_params[0].index
+df_params_tidy = pd.concat(lst_df_params + [lst_bayes_params], axis=1)
 
-multicolumn_lst = [('DLS','Estimates'),('DLS','P-value'),
-                   ('ULS','Estimates'),('ULS','P-value')]
+multicolumn_lst = [('ULS','Estimates'),('ULS','P-value'),('ULS','Estimates (compl. std.)'),
+                   ('WLS','Estimates'),('WLS','P-value'),('WLS','Estimates (compl. std.)'),
+                   ('DLS','Estimates'),('DLS','P-value'),('DLS','Estimates (compl. std.)'),
+                   ('Bayesian','Estimates'),('Bayesian','Conf. Int. (Lower)'),
+                   ('Bayesian','Conf. Int. (Upper)'),('Bayesian','Estimates (compl. std.)')]
 
 df_params_tidy.columns = pd.MultiIndex.from_tuples(multicolumn_lst,
                                                       names=['', ''])
 
 ## To latex
 ### Prelims
-dict_options = {'column_format': 'p{4.75cm}p{4.75cm}' + 'p{1cm}' * df_params_tidy.shape[1],
+dict_options = {'column_format': 'p{3.5cm}p{3.5cm}' + 'p{.75cm}' * df_params_tidy.shape[1],
                 'caption': ('Factor Loadings, Variances and Covariances: Other Robust Estimation Procedures'),
                 'label': 'tab:cfa_table_robust',
                 'position': 'th'}
-notes = '\\multicolumn{6}{p{16cm}}{\\textit{Notes.} Factor loadings, factor variance, and unique variances and covariances of the two-factor theory model estimated with several robust estimation procedures. The table only displays the factor loadings and variances and their respective p-values. DLS stands for distributionally-weighted least-squares and ULS for unweighted least squares} \n'
-string_size = '\\scriptsize\n'
+notes = '\\multicolumn{15}{p{16cm}}{\\textit{Notes.} Factor loadings, factor variance, and unique variances and covariances of the two-factor theory model estimated with several robust estimation procedures. The table only displays the (completely standardized) factor loadings and variances and their respective p-values. For the Bayesian model, we report the 95\%-confidence interval bounds instead of the p-values. ULS is Unweighted Least Squares, WLS is Weighted Least Squares, DLS is Distributionally-Weighted Least Squares and Bayesian is the factor model estimated with Bayesian techniques..} \n'
+string_size = '\\tiny\n'
 
 ### Get latex table and save
 latex_params = table2Latex(df_params_tidy, dict_options, notes, string_size)
@@ -128,34 +171,87 @@ text_latex_params = open('Results/CFA_params_robust.tex', 'w')
 text_latex_params.write(latex_params)
 text_latex_params.close()
 
+# All binary models
+lst_df_params =[tidyParamEst(params).iloc[:,[0,2,3]] for params in [df_params_bdwls[df_params_bdwls.op.isin(['=~','~~'])],
+                                                                    df_params_bwlsmv[df_params_bwlsmv.op.isin(['=~','~~'])]]]
+df_params_tidy = pd.concat(lst_df_params, axis=1)
+
+multicolumn_lst = [('DWLS','Estimates'),('DWLS','P-value'),('DWLS','Estimates (compl. std.)'),
+                   ('WLSMV','Estimates'),('WLSMV','P-value'),('WLSMV','Estimates (compl. std.)')]
+
+df_params_tidy.columns = pd.MultiIndex.from_tuples(multicolumn_lst,
+                                                      names=['', ''])
+
+## To latex
+### Prelims
+dict_options = {'column_format': 'p{3.5cm}p{3.5cm}' + 'p{.75cm}' * df_params_tidy.shape[1],
+                'caption': ('Factor Loadings, Variances and Covariances: Binary Two-Factor Theory-Based Model'),
+                'label': 'tab:cfa_table_binary',
+                'position': 'th'}
+notes = '\\multicolumn{8}{p{16cm}}{\\textit{Notes.} Factor loadings, factor variance, and unique variances and covariances of the binary two-factor theory-based model. The table only displays the (completely standardized) factor loadings and variances and their respective p-values. DWLS is diagonally-weighted Least Squares and WLSMV is a Weighted-Least Squares with robust standard errors and a mean- and variance adjusted test statistic.} \n'
+string_size = '\\tiny\n'
+
+### Get latex table and save
+latex_params = table2Latex(df_params_tidy, dict_options, notes, string_size)
+text_latex_params = open('Results/CFA_params_binary.tex', 'w')
+text_latex_params.write(latex_params)
+text_latex_params.close()
+
 # --------------------------------------------
 # Communalities
 # --------------------------------------------
 
-# Clean the tables
-df_r2_dls = df_r2_dls.rename(columns={'x': ('DLS','Communality')}, index=dict_vars)
-df_r2_uls = df_r2_uls.rename(columns={'x': ('ULS','Communality')}, index=dict_vars)
+# Set function
+def makeR2s(table, estimator):
+    # Rename column
+    table_clean = table.rename(columns={'x': (estimator,'Comm.')}, index=dict_vars)
 
-## Add unique variance column
-df_r2_dls[('DLS','Unique Variance')] = 1 - df_r2_dls.iloc[:,0]
-df_r2_uls[('ULS','Unique Variance')] = 1 - df_r2_uls.iloc[:,0]
+    # Add unique variances
+    table_clean[(estimator, 'Unique')] = 1 - table_clean.iloc[:, 0]
 
-df_r2 = pd.concat([df_r2_dls,
-                   df_r2_uls], axis=1)
+    return table_clean
+
+# continuous data
+df_lst_r2 = [makeR2s(t,e) for t,e in zip([df_r2_uls, df_r2_wls,
+                                          df_r2_dls, df_r2_bayes],
+                                         ['ULS', 'WLS', 'DLS', 'Bayesian'])]
+df_r2 = pd.concat(df_lst_r2, axis=1)
 df_r2.columns = pd.MultiIndex.from_tuples(df_r2.columns,
                                                       names=['', ''])
 
 ## To latex
 ### Prelims
-dict_options = {'column_format': 'p{5cm}' + 'p{1.5cm}' * df_r2.shape[1],
+dict_options = {'column_format': 'p{4.5cm}' + 'p{1cm}' * df_r2.shape[1],
                 'caption': ('Communalities and Unique Variances: Other Robust Estimation Procedures'),
                 'label': 'tab:cfa_r2_robust',
                 'position': 'th'}
-notes = '\\multicolumn{3}{p{9cm}}{\\textit{Notes.} Communalities and unique variancess of the proxy variables.} \n'
+notes = '\\multicolumn{9}{p{15.5cm}}{\\textit{Notes.} Communalities and unique variancess of the proxy variables. ULS is Unweighted Least Squares, WLS is Weighted Least Squares, DLS is Distributionally-Weighted Least Squares, and Bayesian is the factor model estimated with Bayesian techniques.} \n'
 string_size = '\\scriptsize\n'
 
 ### Get latex table and save
 latex_r2 = table2Latex(df_r2, dict_options, notes, string_size)
 text_latex_r2 = open('Results/CFA_r2_robust.tex', 'w')
+text_latex_r2.write(latex_r2)
+text_latex_r2.close()
+
+# Binary data
+df_lst_r2 = [makeR2s(t,e) for t,e in zip([df_r2_bdwls, df_r2_bwlsmv],
+                                         ['DWLS', 'WLSMV'])]
+df_r2 = pd.concat(df_lst_r2, axis=1)
+df_r2.columns = pd.MultiIndex.from_tuples(df_r2.columns,
+                                                      names=['', ''])
+
+## To latex
+### Prelims
+dict_options = {'column_format': 'p{4.5cm}' + 'p{1cm}' * df_r2.shape[1],
+                'caption': ('Communalities and Unique Variances: Binary Two-Factor Theory-Based Model'),
+                'label': 'tab:cfa_r2_robust',
+                'position': 'th'}
+notes = '\\multicolumn{5}{p{10cm}}{\\textit{Notes.} Communalities and unique variancess of the proxy variables. DWLS is diagonally-weighted Least Squares and WLSMV is a Weighted-Least Squares with robust standard errors and a mean- and variance adjusted test statistic.} \n'
+string_size = '\\scriptsize\n'
+
+### Get latex table and save
+latex_r2 = table2Latex(df_r2, dict_options, notes, string_size)
+text_latex_r2 = open('Results/CFA_r2_binary.tex', 'w')
 text_latex_r2.write(latex_r2)
 text_latex_r2.close()

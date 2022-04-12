@@ -57,7 +57,7 @@ num_cores = mp.cpu_count()
     and we remove banks that are not insured, not commercial and not in one
     of the 50 states.
     
-    For all schedules we use a trickto get all RCFD and RCON by looking for
+    For all schedules we use a trick to get all RCFD and RCON by looking for
     the four-digit variable name. We then merge those together after loading.
     
     UPDATE 2020-10-14: Securitization variables from the SDI are almost perfectly
@@ -667,13 +667,34 @@ df = df.loc[df.hmda_sec_amount < 1.4e8,:]
 # Save Data
 #--------------------------------------------
 
-df.to_csv('Data\df_sec_note.csv')
+df[df.cr_secveh_ta >= 0].to_csv('Data\df_sec_note.csv')
 df[(df.date > 2010) & (df.cr_secveh_ta >= 0)].to_csv('Data\df_sec_note_20112017.csv')
 
+# Remove banks with fewer than three years of data
+idrssds = df.IDRSSD
+drop_banks = idrssds.value_counts()[idrssds.value_counts() <= 3].index.unique().tolist()
+df_min3 = df[~idrssds.isin(drop_banks)]
+df_min3[df_min3.cr_secveh_ta >= 0].to_csv('Data\df_sec_note_min3.csv')
+df_min3[(df_min3.date > 2010) & (df_min3.cr_secveh_ta >= 0)].to_csv('Data\df_sec_note_min3_20112017.csv')
+
+# Binary data
+df_binary = (df[df.cr_secveh_ta >= 0] != 0) * 1
+df_binary.date = df.date
+df_binary.IDRSSD = df.IDRSSD
+df_min3_binary = (df_min3[df_min3.cr_secveh_ta >= 0] != 0) * 1
+df_min3_binary.date = df_min3.date
+df_min3_binary.IDRSSD = df_min3.IDRSSD
+df_binary.to_csv('Data\df_sec_note_binary.csv')
+df_binary[(df_binary.date > 2010)].to_csv('Data\df_sec_note_binary_20112017.csv')
+df_min3_binary.to_csv('Data\df_sec_note_min3_binary.csv')
+df_min3_binary[(df_min3_binary.date > 2010)].to_csv('Data\df_sec_note_min3_binary_20112017.csv')
+
 # Aggregated data
-df_agg = df.set_index(['IDRSSD','date'])
+df_agg = df[(df.date > 2010) & (df.cr_secveh_ta >= 0)].set_index(['IDRSSD','date'])
 df_agg = df_agg.groupby(level = 'IDRSSD').sum()
 df_agg.to_csv('Data/df_sec_note_20112017_agg.csv')
+df_agg_binary = (df_agg!= 0) * 1
+df_agg_binary.to_csv('Data\df_sec_note_binary_agg_20112017.csv')
 
 # Wide data
 df['date'] = df.date.astype(str)
@@ -692,3 +713,6 @@ df_balanced_wide.columns = [''.join(col).strip() for col in df_balanced_wide.col
 df_balanced_wide = df_balanced_wide - df_balanced_wide.min() # subtract the minimum (useful for R)
 df_wide.to_csv('Data\df_sec_note_wide.csv')
 df_balanced_wide.to_csv('Data\df_sec_note_balanced_wide.csv')
+
+df_balanced_binary = (df_balanced != 0) * 1
+df_balanced.to_csv('Data\df_sec_note_binary_balance.csv')

@@ -28,7 +28,7 @@ library(semTools)
 #----------------------------------------
 
 # Import csv
-file <- 'Data/df_sec_note_binary_20112017.csv'
+file <- 'Data/df_sec_note_binary_agg_20112017.csv'
 df_binary <- read.csv(file)
 
 # ---------------------------------------
@@ -55,6 +55,15 @@ ABCP =~ cr_abcp_ta + cr_abcp_uc_own + cr_abcp_ce_own + cr_abcp_uc_oth + cr_cds_p
 cr_abcp_uc_own ~~ cr_abcp_uc_oth
 cr_abcp_ta ~~ cr_secveh_ta + cr_abcp_ce_own
 '
+
+fit_binary <- cfa(model_1f,
+                  data = df_binary,
+                  estimator = 'WLSMV',
+                  ordered = TRUE)
+
+summary(fit_binary, fit.measures=TRUE, standardized = TRUE, rsquare = TRUE)
+
+# TODO: Hier verder
 
 # Set list of estimators
 # Note: we do not use ML with bootstrap, because BS-ML cannot handle extreme non-normality well

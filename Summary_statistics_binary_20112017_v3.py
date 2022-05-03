@@ -82,7 +82,7 @@ def heatmap(matrix, pvals, file, annot = True):
     fig.savefig('Figures/Correlation_maps/' + file)
     
 # Get correlation matrix and p-vals
-corr = df[var_names[:-1]].corr()
+corr = df[var_names[:-1]].corr(method = 'pearson')
 corr_pval = stats.spearmanr(df[var_names[:-1]])[1]
 
 # Set nice names
@@ -115,6 +115,23 @@ num_sec = df[['date'] + var_names].groupby('date').apply(lambda x: np.sum(abs(x)
 # Change column  and index labels
 num_sec.columns = num_sec.columns.tolist()
 num_sec.index = ['N'] + var_labels
+
+#--------------------------------------------
+# Recurring securitization
+#--------------------------------------------
+
+# Get data
+data_rec = df.groupby(['IDRSSD','date'])[var_names].sum().sum(axis = 1)
+rec_counts = data_rec.value_counts()
+
+# Plot
+x = range(len(rec_counts[1:]))
+fig, ax = plt.subplots(figsize = (12,10))
+ax.set(ylabel = 'Number of bank-years', xlabel = 'Number of securitization variables reported')
+plt.bar(x,rec_counts[1:])
+ax.set_xticks(x)
+plt.tight_layout()
+plt.savefig('Figures/Plot_number_securitizationtypes.png')
 
 #--------------------------------------------
 # Tables to latex

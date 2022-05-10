@@ -16,7 +16,6 @@ setwd('D:/RUG/PhD/Materials_papers/01-Note_on_securitization')
 
 # Import CFA package
 library(lavaan)
-library(semTools)
 
 # other packages
 library(rlist)
@@ -25,7 +24,10 @@ library(foreach)
 library(doParallel)
 
 # Set number of bootstraps
-M <- 1000
+M <- 200
+
+# Set seed
+set.seed(42)
 
 # -------------------------------------------------
 # Set functions
@@ -94,7 +96,8 @@ CFAWrapper <- function(data){
               data = data,
               estimator = 'WLSMV',
               ordered = TRUE,
-              se = 'none')
+              se = 'none',
+              warn = FALSE)
   params <- parameterEstimates(fit)$est
   #params <- coef(fit)
 
@@ -102,37 +105,81 @@ CFAWrapper <- function(data){
   return(params)
 }
 
-# Bootstrap loop function
-bootstrapLooper <- function(unique_banks, data, M){
-  # Set seed
-  set.seed(42)
+# Set function to feed to the foreach loop
+foreachWrapper <- function(unique_banks, data){
+  # Resample Data
+  data_resampled <- blockSampler(unique_banks, data)
 
-  # Set function to feed to the foreach loop
-  foreachWrapper <- function(unique_banks, data){
-    # Resample Data
-    data_resampled <- blockSampler(unique_banks, data)
+  # Get parameter estimates
+  bootstrap_results <- CFAWrapper(data_resampled)
 
-    # Get parameter estimates
-    bootstrap_results <- CFAWrapper(data_resampled)
+  return(bootstrap_results)
+}
 
-    return(bootstrap_results)
-  }
+# Set function that calculates the bias corrected loadings
+biasCorrection <- function(unique_banks, data, M){
+  # Calculate original loadings
+  params_original <- CFAWrapper(df)
 
-  # Set parallel parameters
-  # cores <- detectCores()
-  # myCluster <- makeCluster(cores,
-  #                          type = "PSOCK")
-  # registerDoParallel(myCluster)
+  # Bootstrap loadings
+  ## First set parallel parameters
+  cores <- detectCores()
+  myCluster <- makeCluster(cores,
+                           type = "PSOCK")
+  doParallel::registerDoParallel(myCluster)
 
-  # Bootstrap the parameters
-  list_params <- foreach(i = 1:M, .combine = rbind) %do% {
+  ## Then bootstrap the parameters
+  list_params <- foreach(i = 1:M,
+                         .combine = rbind,
+                         .export = c('blockSampler','CFAWrapper','foreachWrapper'),
+                         .packages = 'lavaan') %dopar% {
     foreachWrapper(unique_banks, data)
   }
-  # stopCluster(myCluster)
+  stopCluster(myCluster)
 
-  # return results
-  return(list_params)
-}
+  # Calculate bias corrected loadings
+  # Set function and call function
+  Correction <- function(boot_lst, params_original){
+    ## First calculate the mean of the bootstrapped parameters
+    params_boot_mean <- colMeans(boot_lst)
+
+    ## Then calculate the corrected parameters
+    bias_correction <- params_boot_mean - params_original
+    params_corrected <- params_original - bias_correction
+
+    return(params_corrected)
+  }
+
+  params_corrected <- Correction(list_params, params_original)
+
+  # Bootstrap standard deviations and confidence intervals (95%)
+  ## First set parallel parameters
+  myCluster2 <- makeCluster(cores,
+                           type = "PSOCK")
+  doParallel::registerDoParallel(myCluster2)
+
+  ## Then bootstrap the parameters
+  lst_sdci_boot <- foreach(i = 1:M,
+                  .combine = rbind,
+                  .export = c('blockSampler','CFAWrapper','foreachWrapper'),
+                  .packages = c('lavaan','foreach')) %dopar% {
+    inner <- foreach(j = 1:M,
+                     .combine = rbind,
+                     .export = c('blockSampler','CFAWrapper','foreachWrapper'),
+                     .packages = c('lavaan','foreach')) %do% {
+      foreachWrapper(unique_banks, data)
+  }
+    Correction(inner, params_original)
+  }
+  stopCluster(myCluster2)
+
+  sd <- apply(lst_sdci_boot, 2, sd)
+  cil <- apply(lst_sdci_boot, 2, quantile, probs = .025)
+  ciu <- apply(lst_sdci_boot, 2, quantile, probs = .975)
+
+  # Return bias corrected loadings
+  return(c(params_corrected, sd, cil, ciu))
+  }
 
 # -------------------------------------------------
 # Load data
@@ -164,19 +211,22 @@ unique_banks <- unique(df$IDRSSD)
 # Run Bootstrap Correction
 # -------------------------------------------------
 
-# Run bootstrap
-# TODO Error and warning capturing
-
-list_params <- bootstrapLooper(unique_banks, df, M)
-
-# Calculate bias-corrected parameter estimates
-params_boot_mean <- colMeans(list_params)
-params_original <- CFAWrapper(df)
-bias_correction <- params_boot_mean - params_original
-params_corrected <- params_original - bias_correction
+# # Run bootstrap
+boot_results <- biasCorrection(unique_banks, df, M)
 
 # Make table and save
-table <- matrix(c(params_original, params_boot_mean, params_corrected, bias_correction), ncol = 4)
-colnames(table) <- c('params_original','params_boot_mean','params_corrected','bias_correction')
+table <- matrix(boot_results, ncol = 4)
+colnames(table) <- c('params_original','sd','cil','ciu')
 
-write.csv(table, 'Bootstrap_correction/Results_bootstrap_corrections_with_warnings.csv')
+write.csv(table, 'Bootstrap_correction/Results_bootstrap_corrections.csv')
+
+
+
+
+
+
+
+
+
+
+

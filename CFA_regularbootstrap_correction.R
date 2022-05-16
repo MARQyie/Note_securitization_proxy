@@ -22,9 +22,10 @@ library(rlist)
 library(evaluate)
 library(foreach)
 library(doParallel)
+library(dplyr)
 
 # Set number of bootstraps
-M <- 200
+M <- 10
 
 # Set seed
 set.seed(42)
@@ -33,9 +34,9 @@ set.seed(42)
 # Set functions
 # -------------------------------------------------
 
-# Block sampler (panel sampler)
-blockSampler <- function(unique_banks,data) {
-  # Function resamples the original dataframe but keeps the panel structure.
+# Block sampler
+blockSampler <- function(data) {
+  # Function resamples the original dataframe
   #
   #     Input
   #     ----
@@ -46,19 +47,15 @@ blockSampler <- function(unique_banks,data) {
   #     ----
   #     data_resampled : resampled dataframe
 
-  # Randomly sample bank IDRSSDs
-  sample_banks <- sample(unique_banks, size=length(unique_banks), replace=T)
-
   # Fetch all years for each randomly picked bank and rbind
-  data_resampled <- do.call(rbind, lapply(sample_banks, function(x)  data[data$IDRSSD==x,]))
+  data_resampled <- sample_n(data, size = nrow(data), replace = T)
 
   # Check if one of the columns is zero only. If true resample data.
   # Continue until statement is satisfied
   data_condition <- lapply(data_resampled[3:ncol(data_resampled)], function(x) all(x == 0))
 
   while (any(data_condition == T)){
-    sample_banks <- sample(unique_banks, size=length(unique_banks), replace=T )
-    data_resampled <- do.call(rbind, lapply(sample_banks, function(x)  data[data$IDRSSD==x,]))
+    data_resampled <- sample_n(data, size = nrow(data), replace = T)
     data_condition <- lapply(data_resampled[3:ncol(data_resampled)], function(x) all(x == 0))
   }
 
@@ -106,9 +103,9 @@ CFAWrapper <- function(data){
 }
 
 # Set function to feed to the foreach loop
-foreachWrapper <- function(unique_banks, data){
+foreachWrapper <- function(data){
   # Resample Data
-  data_resampled <- blockSampler(unique_banks, data)
+  data_resampled <- blockSampler(data)
 
   # Get parameter estimates
   bootstrap_results <- CFAWrapper(data_resampled)
@@ -117,9 +114,9 @@ foreachWrapper <- function(unique_banks, data){
 }
 
 # Set function that calculates the bias corrected loadings
-biasCorrection <- function(unique_banks, data, M){
+biasCorrection <- function(data, M){
   # Calculate original loadings
-  params_original <- CFAWrapper(df)
+  params_original <- CFAWrapper(data)
 
   # Bootstrap loadings
   ## First set parallel parameters
@@ -132,8 +129,8 @@ biasCorrection <- function(unique_banks, data, M){
   list_params <- foreach(i = 1:M,
                          .combine = rbind,
                          .export = c('blockSampler','CFAWrapper','foreachWrapper'),
-                         .packages = 'lavaan') %dopar% {
-    foreachWrapper(unique_banks, data)
+                         .packages = c('lavaan','dplyr')) %dopar% {
+    foreachWrapper(data)
   }
   stopCluster(myCluster)
 
@@ -159,20 +156,31 @@ biasCorrection <- function(unique_banks, data, M){
   doParallel::registerDoParallel(myCluster2)
 
   ## Then bootstrap the parameters
-  lst_sdci_boot <- foreach(i = 1:M,
-                  .combine = rbind,
-                  .export = c('blockSampler','CFAWrapper','foreachWrapper'),
-                  .packages = c('lavaan','foreach')) %dopar% {
-    inner <- foreach(j = 1:M,
-                     .combine = rbind,
-                     .export = c('blockSampler','CFAWrapper','foreachWrapper'),
-                     .packages = c('lavaan','foreach')) %do% {
-      foreachWrapper(unique_banks, data)
+  lst_boot <- foreach(i = 1:M,
+                      .combine = rbind,
+                      .export = c('blockSampler','CFAWrapper','foreachWrapper'),
+                      .packages = c('lavaan','foreach','dplyr')) %:%
+    foreach(j = 1:M,
+            .combine = rbind,
+            .export = c('blockSampler','CFAWrapper','foreachWrapper'),
+            .packages = c('lavaan','foreach','dplyr')) %dopar% {
+      foreachWrapper(data)
   }
-    Correction(inner, params_original)
-  }
-  stopCluster(myCluster2)
 
+  ## Next calculate the bias corrected parameter estimates
+  myCluster3 <- makeCluster(cores,
+                           type = "PSOCK")
+  doParallel::registerDoParallel(myCluster3)
+  lst_sdci_boot <- foreach(i = seq(0,M^2-1, M),
+                           .combine = rbind,
+                           .export = c('blockSampler','CFAWrapper','foreachWrapper'),
+                           .packages = c('lavaan','foreach','dplyr')) %dopar% {
+  j <- M + i
+  Correction(lst_boot[i:j,],
+             params_original)}
+  stopCluster(myCluster3)
+
+  ## And calculate the standard deviations and confidence intervals
   sd <- apply(lst_sdci_boot, 2, sd)
   cil <- apply(lst_sdci_boot, 2, quantile, probs = .025)
   ciu <- apply(lst_sdci_boot, 2, quantile, probs = .975)
@@ -185,9 +193,14 @@ biasCorrection <- function(unique_banks, data, M){
 # Load data
 # -------------------------------------------------
 
-# Import csv
-file <- 'Data/df_sec_note_binary_balance.csv'
-df <- read.csv(file)
+# Import csvs
+## Balanced
+file_bal <- 'Data/df_sec_note_binary_balance.csv'
+df_bal <- read.csv(file_bal)
+
+## Unbalanced
+file_unbal <- 'Data/df_sec_note_binary_20112017.csv'
+df_unbal <- read.csv(file_unbal)
 
 # Remove unneeded rows to speed up sampling
 vars <- c('IDRSSD',
@@ -202,31 +215,22 @@ vars <- c('IDRSSD',
           'cr_abcp_uc_own',
           'cr_abcp_ce_own',
           'cr_abcp_uc_oth')
-df <- df[vars]
-
-# Set unique banks list
-unique_banks <- unique(df$IDRSSD)
+df_bal <- df_bal[vars]
+df_unbal <- df_unbal[vars]
 
 # -------------------------------------------------
 # Run Bootstrap Correction
 # -------------------------------------------------
 
-# # Run bootstrap
-boot_results <- biasCorrection(unique_banks, df, M)
+# # Run bootstraps
+boot_results_bal <- biasCorrection(df_bal, M)
+boot_results_unbal <- biasCorrection(df_unbal, M)
 
-# Make table and save
-table <- matrix(boot_results, ncol = 4)
-colnames(table) <- c('params_original','sd','cil','ciu')
+# Make tables and save
+table_bal <- matrix(boot_results_bal, ncol = 4)
+colnames(table_bal) <- c('params_original','sd','cil','ciu')
+write.csv(table_bal, 'Bootstrap_correction/Results_regularbootstrap_correction_balanced.csv')
 
-write.csv(table, 'Bootstrap_correction/Results_bootstrap_corrections.csv')
-
-
-
-
-
-
-
-
-
-
-
+table_unbal <- matrix(boot_results_unbal, ncol = 4)
+colnames(table_unbal) <- c('params_original','sd','cil','ciu')
+write.csv(table_unbal, 'Bootstrap_correction/Results_regularbootstrap_correction_unbalanced.csv')

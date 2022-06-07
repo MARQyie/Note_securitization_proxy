@@ -10,7 +10,7 @@ library(evaluate)
 # library(doMC)
 # registerDoMC(cores = 24)
 library(foreign)
-library(parallel)
+library(doParallel)
 library(snow)
 
 # Set wd
@@ -32,7 +32,7 @@ model_1f <- '
 '
 
 # Load data and save the unique bank IDs to a list
-data <- read.csv("df_sec_note_binary_balance_v2.csv")
+data <- read.csv("df_sec_note_binary_20112017.csv")
 unique_banks <- unique(data$IDRSSD)
 
 # Remove unneeded rows to speed up sampling
@@ -132,7 +132,7 @@ boot.res <- foreach(b = 1:BB1) %:%
 stopCluster(myCluster)
 
 # Save data
-save(list = ls(all = TRUE), file = paste("bootstrap_bias_corr.RData", sep = ""))
+save(list = ls(all = TRUE), file = paste("panelbootstrap_bias_corr_unbalanced.RData", sep = ""))
 
 #load("bootstrap_bias_corr.RData")
 
@@ -180,7 +180,7 @@ q975.bias.corrected <- apply(bias.corrected.mat, 2, FUN = "quantile", 0.975)
 
 write.csv(cbind(bias.corrected[1:(length(bias.corrected) - 3)], sd.bias.corrected[1:(length(bias.corrected) - 3)],
                 q025.bias.corrected[1:(length(bias.corrected) - 3)], q975.bias.corrected[1:(length(bias.corrected) - 3)]),
-          'Results_panelbootstrap_correction_balanced.csv')
+          'Results_panelbootstrap_correction_unbalanced.csv')
 
 
 

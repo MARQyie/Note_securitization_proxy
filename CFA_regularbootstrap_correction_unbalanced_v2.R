@@ -4,24 +4,25 @@
 # May 2022
 # -------------------------------------------------
 
+# This bootstrap uses a regular bootstrap setup
+
 library(lavaan)
 library(rlist)
 library(evaluate)
-# library(doMC)
-# registerDoMC(cores = 24)
+library(doMC)
+registerDoMC(cores = 24)
 library(foreign)
-library(parallel)
-library(snow)
+library(dplyr)
 
 # Set wd
 setwd('/data/p285325/WP3_SEM/')
-# setwd('D:/RUG/PhD/Materials_papers/01-Note_on_securitization')
 
 # Set number of bootstraps
-BB1 <- 10
-BB2 <- 10
+BB1 <- 1000
+BB2 <- 100
 
 # Set the factor model
+
 model_1f <- '
               # Measurement model
               SEC =~ cr_as_rmbs + cr_as_abs + hmda_sec_amount + cr_secveh_ta  + cr_cds_purchased + cr_abcp_ta + cr_abcp_uc_own + cr_abcp_ce_own + cr_abcp_uc_oth
@@ -32,12 +33,13 @@ model_1f <- '
 '
 
 # Load data and save the unique bank IDs to a list
-data <- read.csv("df_sec_note_binary_balance_v2.csv")
+data <- read.csv("df_sec_note_binary_20112017.csv")
 unique_banks <- unique(data$IDRSSD)
 
 # Remove unneeded rows to speed up sampling
 vars <- c('IDRSSD',
           'date',
+          'cr_as_sbo',
           'cr_as_rmbs',
           'cr_as_abs',
           'hmda_sec_amount',
@@ -56,40 +58,27 @@ fit <- cfa(model_1f,
            ordered = TRUE,
            se = 'none',
            warn = FALSE)
-params.original <- c(parameterEstimates(fit)$est,
-                     fitMeasures(fit, c('chisq',
-                                       'chisq.scaled',
-                                       'srmr',
-                                       'rmsea',
-                                       'rmsea.scaled',
-                                       'cfi',
-                                       'cfi.scaled',
-                                       'tli',
-                                       'tli.scaled')))
+params.original <- parameterEstimates(fit)$est
+fit.original <- fitMeasures(fit, c('chisq',
+                                   'chisq.scaled',
+                                   'srmr',
+                                   'rmsea',
+                                   'rmsea.scaled',
+                                   'cfi',
+                                   'cfi.scaled',
+                                   'tli',
+                                   'tli.scaled'))
 
 # Run bootstrap
-## First set the parallel environment
-cores <- detectCores()
-myCluster <- makeCluster(cores,
-                         type = "SOCK")
-doParallel::registerDoParallel(myCluster)
-
-## Then loop
-boot.res <- foreach(b = 1:BB1) %:%
-  foreach(bb = 1:BB2,
-          .combine = rbind,
-          .packages = 'lavaan') %dopar% {
+boot.res <- foreach(b = 1:BB1) %:% foreach(bb = 1:BB2, .combine = rbind) %dopar% {
 
   # Set seeds
   set.seed(BB1 * b + bb)
 
   # print(c(b,bb))
 
-  # Randomly sample bank IDRSSDs
-  sample_banks <- sample(unique_banks, size = length(unique_banks), replace = T)
-
-  # Fetch all years for each randomly picked bank and rbind
-  data_resampled <- do.call(rbind, lapply(sample_banks, function(x)  data[data$IDRSSD == x,]))
+  # Resample data
+  data_resampled <- sample_n(data, size = nrow(data), replace = T)
 
   # Check if one of the columns is zero only. If true resample data.
   # Continue until statement is satisfied
@@ -112,8 +101,8 @@ boot.res <- foreach(b = 1:BB1) %:%
                  ordered = TRUE,
                  se = 'none',
                  warn = FALSE), silent = TRUE)
-  params.boot <- try(c(parameterEstimates(fit)$est,
-                       fitMeasures(fit, c('chisq',
+  params.boot <- try(parameterEstimates(fit)$est, silent = TRUE)
+  fit.boot <- fitMeasures(fit, c('chisq',
                                  'chisq.scaled',
                                  'srmr',
                                  'rmsea',
@@ -121,15 +110,14 @@ boot.res <- foreach(b = 1:BB1) %:%
                                  'cfi',
                                  'cfi.scaled',
                                  'tli',
-                                 'tli.scaled'))), silent = TRUE) # Immediately append fit measures
+                                 'tli.scaled'))
 
   if (!is.numeric(params.boot)) {
     params.boot <- matrix(0, length(params.original), 1)
   }
-  # Add boostrap information and counter information  to the output
-  params.boot <- c(params.boot, b, bb, counter == 0)
+  # Add fit measures, boostrap information and counter information  to the output
+  params.boot <- c(params.boot, fit.boot, b, bb, counter == 0)
 }
-stopCluster(myCluster)
 
 # Save data
 save(list = ls(all = TRUE), file = paste("bootstrap_bias_corr.RData", sep = ""))

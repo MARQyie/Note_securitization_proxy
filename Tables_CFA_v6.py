@@ -226,7 +226,7 @@ files_rescov = ['Rescov_std_heatmap_1f.png',
                 'Rescov_std_heatmap_sbo.png']
 
 for matrix,name in zip(dfs_rescov, files_rescov):
-    heatmap(matrix.rename(columns=dict_vars, index=dict_vars), name)
+    heatmap(matrix.iloc[1:,:-1].rename(columns=dict_vars, index=dict_vars), name)
 
 # --------------------------------------------
 # Polychoric covariance matrix

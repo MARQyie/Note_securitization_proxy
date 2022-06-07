@@ -25,15 +25,15 @@ os.chdir(r'D:\RUG\PhD\Materials_papers\01-Note_on_securitization')
 # --------------------------------------------
 
 # Bootstrapped data
-df = pd.read_csv('Bootstrap_correction/Results_bootstrap_corrections.csv',
-                 index_col = 0)
+df = pd.read_csv('Bootstrap_correction/Results_panelbootstrap_correction_unbalanced.csv',
+                 index_col=0)
 
 # Original Estimates
-df_orig = pd.read_csv('Bootstrap_correction/CFA_params_binary_balanced.csv',
-                      index_col = 0)
+# df_orig = pd.read_csv('Bootstrap_correction/CFA_params_binary_balanced.csv',
+#                       index_col = 0)
 
 # --------------------------------------------
-# Make table
+# Make table parameters
 # --------------------------------------------
 
 # Subset data
@@ -41,54 +41,67 @@ ints = range(0, 31)
 df_clean = df.iloc[ints, :]
 
 # Add column with original data
-df_clean.insert(loc = 0,
-                column = 'params_orig',
-                value = df_orig.iloc[ints, 3].values)
+# df_clean.insert(loc = 0,
+#                 column = 'params_orig',
+#                 value = df_orig.iloc[ints, 3].values)
 
 # Set columns
-col_names = pd.MultiIndex.from_tuples([('Estimates', 'Original'),
-                                       ('Estimates', 'Corrected'),
-                                       ('SD (Corrected)', ''),
-                                       ('Conf. Int. (Corrected)', 'Lower Bound'),
-                                       ('Conf. Int. (Corrected)', 'Upper Bound')])
+col_names = pd.MultiIndex.from_tuples([('Estimates', ''),
+                                       ('SD', ''),
+                                       ('Conf. Int.', 'Lower Bound'),
+                                       ('Conf. Int.', 'Upper Bound')])
 df_clean.columns = col_names
 
 # Set index
-index_level0 = ['F1'] * 9 +\
+index_level0 = ['F1'] * 9 + \
                ['Un. Com. Own ABCP Conduits', 'TA Sec. Vehicles',
-                'TA ABCP Conduits'] +\
-               ['Sec. Residential Loan', 'Sec. Other Assets',
+                'TA ABCP Conduits'] + \
+               ['Sec. Residential Loans', 'Sec. Other Assets',
                 'Sec. Residential Mortgage', 'TA Sec. Vehicles',
                 'CDSs Purchased', 'TA ABCP Conduits',
                 'Un. Com. Own ABCP Conduit', 'Credit Exp. Own ABCP Conduits',
-                'Un. Com. Other ABCP Conduit'] * 2 +\
+                'Un. Com. Other ABCP Conduit'] * 2 + \
                ['F1']
-index_level1 = ['Sec. Residential Loan', 'Sec. Other Assets',
+index_level1 = ['Sec. Residential Loans', 'Sec. Other Assets',
                 'Sec. Residential Mortgage', 'TA Sec. Vehicles',
                 'CDSs Purchased', 'TA ABCP Conduits',
                 'Un. Com. Own ABCP Conduit', 'Credit Exp. Own ABCP Conduits',
-                'Un. Com. Other ABCP Conduit'] +\
+                'Un. Com. Other ABCP Conduit'] + \
                ['Un. Com. Other ABCP Conduits', 'TA ABCP Conduits ',
-                'Credit Exp. Own ABCP Conduits'] +\
-               [''] * (9*2+1)
+                'Credit Exp. Own ABCP Conduits'] + \
+               [''] * (9 * 2 + 1)
 df_clean.index = pd.MultiIndex.from_tuples(list(zip(index_level0, index_level1)))
 
 # --------------------------------------------
-# To latex
+# Make Table test statistics
+# --------------------------------------------
+
+# Make table
+df_test_stats = df.loc[['chisq.scaled', 'srmr', 'rmsea.scaled', 'cfi'], :]  # NOTE TLI is missing from the data!
+
+# Set nice column and row names
+df_test_stats.columns = pd.MultiIndex.from_tuples([('Test Stat.', ''),
+                                       ('SD', ''),
+                                       ('Conf. Int.', 'Lower Bound'),
+                                       ('Conf. Int.', 'Upper Bound')])
+df_test_stats.index = ['scaled $\chi^2$','SRMR','RMSEA','CFI']
+
+# --------------------------------------------
+# To latex Parameters
 # --------------------------------------------
 
 # Transform to latex
-caption = 'Bootstrap Corrected Factor Loadings, (Co-)Variances and Thresholds: One-Factor Model'
-table_latex = df_clean.to_latex(na_rep = '',
-                                float_format = '{:0.4f}'.format,
-                                longtable = False,
-                                multicolumn = True,
-                                multicolumn_format = 'c',
-                                escape = False,
-                                caption = caption,
-                                column_format = 'p{4.75cm}p{4.75cm}' + 'p{1cm}' * df_clean.shape[1],
-                                position ='th!',
-                                label ='tab:bootstrap_correction')
+caption = 'Bootstrap Factor Loadings, (Co-)Variances and Thresholds: One-Factor Model'
+table_latex = df_clean.to_latex(na_rep='',
+                                float_format='{:0.4f}'.format,
+                                longtable=False,
+                                multicolumn=True,
+                                multicolumn_format='c',
+                                escape=False,
+                                caption=caption,
+                                column_format='p{4.75cm}p{4.75cm}' + 'p{1cm}' * df_clean.shape[1],
+                                position='th!',
+                                label='tab:bootstrap_correction')
 
 # Add headers
 # Factor loadings
@@ -108,7 +121,8 @@ table_latex = table_latex[:location] + unique_var + table_latex[location:]
 
 # Unique variances
 unique_var = '\n&&&&& \\\\ \n \\multicolumn{6}{l}{\\textbf{Unique variances}} \\\\'
-location = table_latex.replace('Sec. Residential Loans', 'X'* len('Sec. Residential Loans'), 2).find('\nSec. Residential Loans &')
+location = table_latex.replace('Sec. Residential Loans', 'X' * len('Sec. Residential Loans'), 2).find(
+    '\nSec. Residential Loans &')
 table_latex = table_latex[:location] + unique_var + table_latex[location:]
 
 # Factor variances
@@ -117,19 +131,52 @@ location = table_latex.replace('F1', 'XX', 1).find('F1')
 table_latex = table_latex[:location] + fac_var + table_latex[location:]
 
 # Add notes
-notes = '\\multicolumn{6}{p{16cm}}{\\textit{Notes.}  For the factor loadings and (co-)variances, this table shows their estimated values, bootstrap corrected estimated values, standard deviations of the bootstrap corrected estimated values and the confidence interval of the bootstrap corrected estimated values. The table also presents the thresholds for each proxy. For both the model and the bootstrap correction we use a balanced sample.} \n'
+notes = '\\multicolumn{6}{p{16cm}}{\\textit{Notes.}  For the factor loadings and (co-)variances, this table shows their bootstrapped values, standard deviations and the 95\%-confidence interval. The table also presents the thresholds for each proxy. For both the model and the bootstrap correction we use a balanced sample.} \n'
 location_mid = table_latex.find('\end{tabular}')
 table_latex = table_latex[:location_mid] + notes + table_latex[location_mid:]
 
 # Change string size
 location_size = table_latex.find('\centering\n')
 table_latex = table_latex[:location_size + len('\centering\n')] + '\\scriptsize\n' + table_latex[location_size + len(
-        '\centering\n'):]
+    '\centering\n'):]
 
-# --------------------------------------------
 # Save
 # --------------------------------------------
 
 latex_text = open('Bootstrap_correction/Table_bootstrap_correction.tex', 'w')
+latex_text.write(table_latex)
+latex_text.close()
+
+# --------------------------------------------
+# To latex Fit
+# --------------------------------------------
+
+# Transform to latex
+caption = 'Bootstrap Fit Indices: One-Factor Model'
+table_latex = df_test_stats.to_latex(na_rep='',
+                                float_format='{:0.4f}'.format,
+                                longtable=False,
+                                multicolumn=True,
+                                multicolumn_format='c',
+                                escape=False,
+                                caption=caption,
+                                column_format='p{4.75cm}' + 'p{1cm}' * df_test_stats.shape[1],
+                                position='th!',
+                                label='tab:bootstrap_correction_fit')
+
+# Add notes
+notes = '\\multicolumn{6}{p{16cm}}{\\textit{Notes.}  This table shows the fit indices of the bootstrapped one-factor model. } \n'
+location_mid = table_latex.find('\end{tabular}')
+table_latex = table_latex[:location_mid] + notes + table_latex[location_mid:]
+
+# Change string size
+location_size = table_latex.find('\centering\n')
+table_latex = table_latex[:location_size + len('\centering\n')] + '\\scriptsize\n' + table_latex[location_size + len(
+    '\centering\n'):]
+
+# Save
+# --------------------------------------------
+
+latex_text = open('Bootstrap_correction/Table_bootstrap_correction_fit.tex','w')
 latex_text.write(table_latex)
 latex_text.close()

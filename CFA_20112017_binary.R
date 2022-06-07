@@ -209,3 +209,37 @@ lavaanPlot(model = fit_binary,
            covs = TRUE,
            stand = TRUE,
            stars = list('latent','covs'))
+
+# ---------------------------------------
+# Three factor models
+#----------------------------------------
+
+# Set model equations
+model_3f1 <-  '
+# Measurement model
+ABSCDO =~ 1*cr_as_rmbs + cr_as_abs + hmda_sec_amount + cr_secveh_ta  + cr_cds_purchased
+ABCP =~ cr_abcp_ta + cr_abcp_uc_own + cr_abcp_ce_own + cr_abcp_uc_oth + cr_cds_purchased
+SBO =~ cr_as_sbo
+
+# Error covariances
+cr_abcp_uc_own ~~ cr_abcp_uc_oth
+cr_abcp_ta ~~ cr_secveh_ta + cr_abcp_ce_own
+'
+
+model_3f2 <-  '
+# Measurement model
+ABSCDO =~ cr_as_rmbs + cr_as_abs + hmda_sec_amount + cr_secveh_ta + cr_cds_purchased
+ABCP =~ cr_abcp_ta + cr_abcp_uc_own + cr_abcp_ce_own + cr_abcp_uc_oth + cr_cds_purchased
+
+cr_as_sbo ~~ ABSCDO + ABCP
+
+# Error covariances
+cr_abcp_uc_own ~~ cr_abcp_uc_oth
+cr_abcp_ta ~~ cr_secveh_ta + cr_abcp_ce_own
+'
+
+fit <- cfa(model_3f2,
+           data = df_binary,
+           estimator = 'WLSMV',
+           ordered = TRUE)
+summary(fit, fit.measures=TRUE, standardized = TRUE, rsquare = TRUE)

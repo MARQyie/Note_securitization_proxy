@@ -243,3 +243,52 @@ fit <- cfa(model_3f2,
            estimator = 'WLSMV',
            ordered = TRUE)
 summary(fit, fit.measures=TRUE, standardized = TRUE, rsquare = TRUE)
+
+# ---------------------------------------
+# Extra one-factor models
+#----------------------------------------
+
+model_1f_nohmda <-  '
+# Measurement model
+SEC =~ cr_as_rmbs + cr_as_abs + cr_secveh_ta  + cr_cds_purchased + cr_abcp_ta + cr_abcp_uc_own + cr_abcp_ce_own + cr_abcp_uc_oth
+
+# Error covariances
+cr_abcp_uc_own ~~ cr_abcp_uc_oth
+cr_abcp_ta ~~ cr_secveh_ta + cr_abcp_ce_own'
+
+fit <- cfa(model_1f_nohmda,
+           data = df_binary,
+           estimator = 'WLSMV',
+           ordered = TRUE)
+summary(fit, fit.measures=TRUE, standardized = TRUE, rsquare = TRUE)
+
+model_1f_4error <-  '
+# Measurement model
+SEC =~ cr_as_rmbs + cr_as_abs + hmda_sec_amount + cr_secveh_ta  + cr_cds_purchased + cr_abcp_ta + cr_abcp_uc_own + cr_abcp_ce_own + cr_abcp_uc_oth
+
+# Error covariances
+cr_abcp_uc_own ~~ cr_abcp_uc_oth
+cr_abcp_ta ~~ cr_secveh_ta + cr_abcp_ce_own
+
+# Extra error covariances
+cr_as_rmbs ~~ cr_abcp_uc_oth + cr_abcp_uc_own
+cr_abcp_ta ~~ cr_cds_purchased + cr_abcp_uc_own'
+
+fit <- cfa(model_1f_4error,
+           data = df_binary,
+           estimator = 'WLSMV',
+           ordered = TRUE)
+summary(fit, fit.measures=TRUE, standardized = TRUE, rsquare = TRUE)
+
+model_1f_1error <-  '
+# Measurement model
+SEC =~ cr_as_rmbs + cr_as_abs + hmda_sec_amount + cr_secveh_ta  + cr_cds_purchased + cr_abcp_ta + cr_abcp_uc_own + cr_abcp_ce_own + cr_abcp_uc_oth
+
+# Error covariances
+cr_abcp_ta ~~ cr_abcp_ce_own'
+
+fit <- cfa(model_1f_1error,
+           data = df_binary,
+           estimator = 'WLSMV',
+           ordered = TRUE)
+summary(fit, fit.measures=TRUE, standardized = TRUE, rsquare = TRUE)
